@@ -266,6 +266,9 @@ public class DungeonScreen implements Screen {
         font.setColor(Color.LIGHT_GRAY);
         font.draw(batch, statusMessage, 5, 14);
 
+        font.setColor(Color.GRAY);
+        font.draw(batch, "[TAB] Menu | [ESC] Sair", viewport.getWorldWidth() - 165, 14);
+
         batch.end();
     }
 

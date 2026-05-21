@@ -223,7 +223,7 @@ public class PartyMenuScreen implements Screen {
                 Pokemon target = player.getTeam().get(selectedIndex);
                 if (!target.isFainted() && target.getHp() < target.getMaxHp()) {
                     target.heal(selectedItem.getHealAmount());
-                    inventory.removeItem(selectedItem); // Remove item usado
+                    inventory.getItems().remove(selectedItem); // Remove item usado
                     
                     state = MenuState.TAB_POKEMON; // Volta pra tela de time
                     selectedIndex = 0;
