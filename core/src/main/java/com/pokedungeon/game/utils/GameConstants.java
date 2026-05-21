@@ -10,9 +10,13 @@ public final class GameConstants {
         // Classe utilitária, não deve ser instanciada
     }
 
-    // Dimensões da janela
-    public static final int SCREEN_WIDTH = 640;
-    public static final int SCREEN_HEIGHT = 480;
+    // Dimensões da janela (Desktop)
+    public static final int SCREEN_WIDTH = 1280;
+    public static final int SCREEN_HEIGHT = 720;
+
+    // Resolução virtual (Pixel Art Upscale 3x)
+    public static final int VIRTUAL_WIDTH = 426;
+    public static final int VIRTUAL_HEIGHT = 240;
 
     // Tamanho do tile no mapa da dungeon
     public static final int TILE_SIZE = 32;

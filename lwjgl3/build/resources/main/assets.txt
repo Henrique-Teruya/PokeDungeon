@@ -1,2 +1,16 @@
+fonts/PressStart2P-Regular.ttf
 hs_err_pid3114.log
 libgdx.png
+sprites/charmander.PNG
+sprites/charmandercostas.PNG
+sprites/onyx.PNG
+sprites/personagem.PNG
+sprites/rattata.PNG
+sprites/squirtle.PNG
+sprites/squirtledecostas.PNG
+sprites/zubat.PNG
+tiles/chest.png
+tiles/door.png
+tiles/floor.png
+tiles/wall.png
+ui/barratexto.PNG
