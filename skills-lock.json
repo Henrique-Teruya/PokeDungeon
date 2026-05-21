@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "skills": {
+    "clean-code": {
+      "source": "sickn33/antigravity-awesome-skills",
+      "sourceType": "github",
+      "skillPath": "skills/clean-code/SKILL.md",
+      "computedHash": "74bf6ded4f61ddcb593e7a29beb96c284f888cbe0639ad6e23710447c36ff19a"
+    },
+    "game-development": {
+      "source": "sickn33/antigravity-awesome-skills",
+      "sourceType": "github",
+      "skillPath": "skills/game-development/SKILL.md",
+      "computedHash": "a5a1b37d86be11134798abc1558f964ca4fc538fc56ac661f779a90a54e338ca"
+    },
+    "java-architect": {
+      "source": "jeffallan/claude-skills",
+      "sourceType": "github",
+      "skillPath": "skills/java-architect/SKILL.md",
+      "computedHash": "02a7bcc716c9338aedcb0727be38a86d6addbadb1c17b485d019f654d2b04af6"
+    }
+  }
+}
