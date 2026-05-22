@@ -6,6 +6,10 @@ sprites/charmandercostas.PNG
 sprites/onyx.PNG
 sprites/personagem.PNG
 sprites/personagem2.png
+sprites/player/player_down.png
+sprites/player/player_left.png
+sprites/player/player_right.png
+sprites/player/player_up.png
 sprites/rattata.PNG
 sprites/squirtle.PNG
 sprites/squirtledecostas.PNG
@@ -13,5 +17,7 @@ sprites/zubat.PNG
 tiles/chest.png
 tiles/door.png
 tiles/floor.png
+tiles/grass.png
 tiles/wall.png
+tiles/water.png
 ui/barratexto.PNG
