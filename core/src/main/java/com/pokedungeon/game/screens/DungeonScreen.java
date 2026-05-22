@@ -30,7 +30,14 @@ public class DungeonScreen implements Screen {
     private DungeonManager dungeonManager;
 
     // Texturas visuais
-    private Texture texFloor, texWall, texDoor, texChest, texPlayer;
+    private Texture texFloor, texWall, texDoor, texChest;
+    
+    // Animação do jogador
+    private Texture spriteSheet;
+    private com.badlogic.gdx.graphics.g2d.TextureRegion[][] frames;
+    private int currentDirection = 0; // 0=Baixo, 1=Esquerda, 2=Direita, 3=Cima
+    private float stateTime = 0f;
+    private boolean isMoving = false;
 
     // Movimentação e mapa
     private float playerX, playerY;
@@ -57,7 +64,6 @@ public class DungeonScreen implements Screen {
         texWall = new Texture(Gdx.files.internal("tiles/wall.png"));
         texDoor = new Texture(Gdx.files.internal("tiles/door.png"));
         texChest = new Texture(Gdx.files.internal("tiles/chest.png"));
-        texPlayer = new Texture(Gdx.files.internal("sprites/personagem.PNG"));
 
         initializeGame();
     }
@@ -108,6 +114,12 @@ public class DungeonScreen implements Screen {
 
         dungeonManager = new DungeonManager(graph, entrance);
         statusMessage = "Explore a dungeon!";
+        
+        // Inicializa a spritesheet do jogador
+        spriteSheet = new Texture(Gdx.files.internal("sprites/personagem2.png"));
+        int frameWidth = spriteSheet.getWidth(); // A imagem tem apenas 1 coluna
+        int frameHeight = spriteSheet.getHeight() / 4; // E 4 linhas (uma por direção)
+        frames = com.badlogic.gdx.graphics.g2d.TextureRegion.split(spriteSheet, frameWidth, frameHeight);
         
         buildRoomMap();
     }
@@ -192,6 +204,12 @@ public class DungeonScreen implements Screen {
     public void render(float delta) {
         handleMovement(delta);
         
+        if (isMoving) {
+            stateTime += delta;
+        } else {
+            stateTime = 0f;
+        }
+        
         if (Gdx.input.isKeyJustPressed(Input.Keys.ESCAPE)) {
             game.setScreen(new MenuScreen(game));
             dispose();
@@ -240,7 +258,17 @@ public class DungeonScreen implements Screen {
             batch.draw(texChest, offsetX + chestCol * TILE, offsetY + chestRow * TILE, TILE, TILE);
         }
         
-        batch.draw(texPlayer, offsetX + playerX, offsetY + playerY, TILE, TILE);
+        // A imagem atual só tem 1 frame por direção (coluna 0)
+        // Se no futuro você colocar uma imagem com 3 frames (colunas), podemos reativar o ciclo de caminhada aqui.
+        com.badlogic.gdx.graphics.g2d.TextureRegion currentFrame = frames[currentDirection][0];
+        
+        // Desenha o personagem (ajustando escala para o tamanho da célula da spritesheet)
+        float drawW = 32f; // Reduzido um pouco para caber melhor na tela, já que a imagem original é bem larga
+        float drawH = 32f;
+        float drawX = offsetX + playerX + (TILE - drawW) / 2f;
+        float drawY = offsetY + playerY + (TILE - drawH) / 2f;
+        
+        batch.draw(currentFrame, drawX, drawY, drawW, drawH);
 
         // ========== DESENHA UI OVERLAY ==========
         batch.setColor(0, 0, 0, 0.7f);
@@ -277,10 +305,28 @@ public class DungeonScreen implements Screen {
         float nextY = playerY;
         float speed = GameConstants.PLAYER_SPEED;
 
-        if (Gdx.input.isKeyPressed(Input.Keys.LEFT) || Gdx.input.isKeyPressed(Input.Keys.A)) nextX -= speed * delta;
-        if (Gdx.input.isKeyPressed(Input.Keys.RIGHT) || Gdx.input.isKeyPressed(Input.Keys.D)) nextX += speed * delta;
-        if (Gdx.input.isKeyPressed(Input.Keys.DOWN) || Gdx.input.isKeyPressed(Input.Keys.S)) nextY -= speed * delta;
-        if (Gdx.input.isKeyPressed(Input.Keys.UP) || Gdx.input.isKeyPressed(Input.Keys.W)) nextY += speed * delta;
+        isMoving = false;
+
+        if (Gdx.input.isKeyPressed(Input.Keys.LEFT) || Gdx.input.isKeyPressed(Input.Keys.A)) {
+            nextX -= speed * delta;
+            currentDirection = 1;
+            isMoving = true;
+        }
+        if (Gdx.input.isKeyPressed(Input.Keys.RIGHT) || Gdx.input.isKeyPressed(Input.Keys.D)) {
+            nextX += speed * delta;
+            currentDirection = 2;
+            isMoving = true;
+        }
+        if (Gdx.input.isKeyPressed(Input.Keys.DOWN) || Gdx.input.isKeyPressed(Input.Keys.S)) {
+            nextY -= speed * delta;
+            currentDirection = 0;
+            isMoving = true;
+        }
+        if (Gdx.input.isKeyPressed(Input.Keys.UP) || Gdx.input.isKeyPressed(Input.Keys.W)) {
+            nextY += speed * delta;
+            currentDirection = 3;
+            isMoving = true;
+        }
 
         Rectangle pRect = new Rectangle(nextX + 6, nextY + 6, TILE - 12, TILE - 12);
         
@@ -387,6 +433,6 @@ public class DungeonScreen implements Screen {
         texWall.dispose();
         texDoor.dispose();
         texChest.dispose();
-        texPlayer.dispose();
+        if (spriteSheet != null) spriteSheet.dispose();
     }
 }

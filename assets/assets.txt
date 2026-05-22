@@ -5,6 +5,7 @@ sprites/charmander.PNG
 sprites/charmandercostas.PNG
 sprites/onyx.PNG
 sprites/personagem.PNG
+sprites/personagem2.png
 sprites/rattata.PNG
 sprites/squirtle.PNG
 sprites/squirtledecostas.PNG
