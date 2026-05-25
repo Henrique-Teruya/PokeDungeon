@@ -1,6 +1,7 @@
 package com.pokedungeon.game.screens;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
@@ -30,11 +31,10 @@ public class DungeonScreen implements Screen {
     private DungeonManager dungeonManager;
 
     // Texturas visuais
-    private Texture texFloor, texWall, texDoor, texChest;
+    private Texture texFloor, texWall, texDoor, texChest, texWater, texGrass;
     
-    // Animação do jogador
-    private Texture spriteSheet;
-    private com.badlogic.gdx.graphics.g2d.TextureRegion[][] frames;
+    // Sprites do jogador por direção
+    private Texture texPlayerDown, texPlayerLeft, texPlayerRight, texPlayerUp;
     private int currentDirection = 0; // 0=Baixo, 1=Esquerda, 2=Direita, 3=Cima
     private float stateTime = 0f;
     private boolean isMoving = false;
@@ -46,6 +46,19 @@ public class DungeonScreen implements Screen {
     private final int MAP_ROWS = 7;  // 7 * 32 = 224 px
 
     private String statusMessage = "";
+
+    // Sprites dos pokémons do time para a sidebar
+    private HashMap<String, Texture> pokemonSprites;
+
+    // Modo de seleção de time (TAB)
+    private boolean selectingTeam = false;
+    private int teamCursorIndex = 0;
+    private int firstSwapIndex = -1;
+    private float selectionCooldown = 0f;
+
+    // Menu de pausa (ESC)
+    private boolean paused = false;
+    private int pauseCursor = 0;
 
     // Estrutura auxiliar para mapear portas na sala
     class DoorPoint {
@@ -64,6 +77,8 @@ public class DungeonScreen implements Screen {
         texWall = new Texture(Gdx.files.internal("tiles/wall.png"));
         texDoor = new Texture(Gdx.files.internal("tiles/door.png"));
         texChest = new Texture(Gdx.files.internal("tiles/chest.png"));
+        texWater = new Texture(Gdx.files.internal("tiles/water.png"));
+        texGrass = new Texture(Gdx.files.internal("tiles/grass.png"));
 
         initializeGame();
     }
@@ -81,6 +96,16 @@ public class DungeonScreen implements Screen {
 
         player.addPokemon(charmander);
         player.addPokemon(squirtle);
+
+        pokemonSprites = new HashMap<>();
+        for (Pokemon p : player.getTeam()) {
+            String path = "sprites/" + p.getName().toLowerCase() + ".PNG";
+            if (Gdx.files.internal(path).exists()) {
+                Texture tex = new Texture(Gdx.files.internal(path));
+                tex.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
+                pokemonSprites.put(p.getName(), tex);
+            }
+        }
 
         inventory = new Inventory();
         inventory.addItem(new Item("Poção", GameConstants.DEFAULT_POTION_HEAL));
@@ -115,11 +140,11 @@ public class DungeonScreen implements Screen {
         dungeonManager = new DungeonManager(graph, entrance);
         statusMessage = "Explore a dungeon!";
         
-        // Inicializa a spritesheet do jogador
-        spriteSheet = new Texture(Gdx.files.internal("sprites/personagem2.png"));
-        int frameWidth = spriteSheet.getWidth(); // A imagem tem apenas 1 coluna
-        int frameHeight = spriteSheet.getHeight() / 4; // E 4 linhas (uma por direção)
-        frames = com.badlogic.gdx.graphics.g2d.TextureRegion.split(spriteSheet, frameWidth, frameHeight);
+        // Carrega sprites individuais do jogador por direção
+        texPlayerDown = new Texture(Gdx.files.internal("sprites/player/player_down.png"));
+        texPlayerLeft = new Texture(Gdx.files.internal("sprites/player/player_left.png"));
+        texPlayerRight = new Texture(Gdx.files.internal("sprites/player/player_right.png"));
+        texPlayerUp = new Texture(Gdx.files.internal("sprites/player/player_up.png"));
         
         buildRoomMap();
     }
@@ -202,23 +227,46 @@ public class DungeonScreen implements Screen {
 
     @Override
     public void render(float delta) {
-        handleMovement(delta);
+        selectionCooldown -= delta;
+
+        // Input global tratado antes do movimento/seleção para evitar dupla ativação
+        if (paused) {
+            handlePauseInput();
+            stateTime = 0f;
+        } else if (selectingTeam) {
+            if (Gdx.input.isKeyJustPressed(Input.Keys.ESCAPE) || Gdx.input.isKeyJustPressed(Input.Keys.TAB)) {
+                selectingTeam = false;
+                firstSwapIndex = -1;
+                selectionCooldown = 0.2f;
+                return;
+            }
+            handleTeamSelectionInput();
+            isMoving = false;
+            stateTime = 0f;
+        } else {
+            if (Gdx.input.isKeyJustPressed(Input.Keys.ESCAPE)) {
+                paused = true;
+                pauseCursor = 0;
+                return;
+            }
+            if (Gdx.input.isKeyJustPressed(Input.Keys.TAB)) {
+                if (player.getTeam().size() >= 2) {
+                    selectingTeam = true;
+                    selectionCooldown = 0.2f;
+                    return;
+                }
+            }
+            if (Gdx.input.isKeyJustPressed(Input.Keys.M)) {
+                game.setScreen(new PartyMenuScreen(game, this, player, inventory));
+                return;
+            }
+            handleMovement(delta);
+        }
         
         if (isMoving) {
             stateTime += delta;
         } else {
             stateTime = 0f;
-        }
-        
-        if (Gdx.input.isKeyJustPressed(Input.Keys.ESCAPE)) {
-            game.setScreen(new MenuScreen(game));
-            dispose();
-            return;
-        }
-        
-        if (Gdx.input.isKeyJustPressed(Input.Keys.TAB) || Gdx.input.isKeyJustPressed(Input.Keys.M)) {
-            game.setScreen(new PartyMenuScreen(game, this, player, inventory));
-            return;
         }
 
         ScreenUtils.clear(0, 0, 0, 1f);
@@ -246,6 +294,14 @@ public class DungeonScreen implements Screen {
                 
                 if (isWall(c, r)) {
                     batch.draw(texWall, px, py, TILE, TILE);
+                } else {
+                    // Decoração do chão com grama e água
+                    int roomSeed = dungeonManager.getCurrentRoom().getId() * 100 + c * 10 + r;
+                    if (roomSeed % 17 == 0) {
+                        batch.draw(texGrass, px, py, TILE, TILE);
+                    } else if (roomSeed % 13 == 0) {
+                        batch.draw(texWater, px, py, TILE, TILE);
+                    }
                 }
             }
         }
@@ -258,17 +314,17 @@ public class DungeonScreen implements Screen {
             batch.draw(texChest, offsetX + chestCol * TILE, offsetY + chestRow * TILE, TILE, TILE);
         }
         
-        // A imagem atual só tem 1 frame por direção (coluna 0)
-        // Se no futuro você colocar uma imagem com 3 frames (colunas), podemos reativar o ciclo de caminhada aqui.
-        com.badlogic.gdx.graphics.g2d.TextureRegion currentFrame = frames[currentDirection][0];
-        
-        // Desenha o personagem (ajustando escala para o tamanho da célula da spritesheet)
-        float drawW = 32f; // Reduzido um pouco para caber melhor na tela, já que a imagem original é bem larga
+        // Desenha o sprite do jogador conforme a direção
+        Texture playerTex = getPlayerTexture();
+        float drawW = 32f;
         float drawH = 32f;
         float drawX = offsetX + playerX + (TILE - drawW) / 2f;
         float drawY = offsetY + playerY + (TILE - drawH) / 2f;
         
-        batch.draw(currentFrame, drawX, drawY, drawW, drawH);
+        batch.draw(playerTex, drawX, drawY, drawW, drawH);
+
+        // ========== SIDEBAR DA EQUIPE ==========
+        drawPartySidebar(batch, font);
 
         // ========== DESENHA UI OVERLAY ==========
         batch.setColor(0, 0, 0, 0.7f);
@@ -291,13 +347,200 @@ public class DungeonScreen implements Screen {
         batch.draw(game.getPixelWhite(), 0, 0, viewport.getWorldWidth(), 20);
         batch.setColor(Color.WHITE);
         
-        font.setColor(Color.LIGHT_GRAY);
-        font.draw(batch, statusMessage, 5, 14);
+        if (selectingTeam) {
+            String msg = "Selecione 2 Pokemons p/ trocar [ENTER]";
+            if (firstSwapIndex != -1) {
+                msg = "Selecione o 2o Pokemon [ENTER]";
+            }
+            font.setColor(Color.ORANGE);
+            font.draw(batch, msg, 5, 14);
+            font.setColor(Color.GRAY);
+            font.draw(batch, "[TAB] Sair", viewport.getWorldWidth() - 100, 14);
+        } else {
+            font.setColor(Color.LIGHT_GRAY);
+            font.draw(batch, statusMessage, 5, 14);
+            font.setColor(Color.GRAY);
+            font.draw(batch, "[TAB] Menu | [ESC] Sair", viewport.getWorldWidth() - 165, 14);
+        }
 
-        font.setColor(Color.GRAY);
-        font.draw(batch, "[TAB] Menu | [ESC] Sair", viewport.getWorldWidth() - 165, 14);
+        if (paused) {
+            drawPauseMenu(batch, font, viewport);
+        }
 
         batch.end();
+    }
+
+    private void drawPauseMenu(SpriteBatch batch, BitmapFont font, Viewport viewport) {
+        float sw = viewport.getWorldWidth();
+        float sh = viewport.getWorldHeight();
+
+        // Fundo escuro
+        batch.setColor(0, 0, 0, 0.8f);
+        batch.draw(game.getPixelWhite(), 0, 0, sw, sh);
+        batch.setColor(Color.WHITE);
+
+        // Título
+        font.setColor(Color.WHITE);
+        font.draw(batch, "PAUSE", sw / 2 - 20, sh / 2 + 30);
+
+        // Opções
+        String[] options = { "RESUMIR", "SAIR" };
+        float y = sh / 2;
+        for (int i = 0; i < options.length; i++) {
+            if (i == pauseCursor) {
+                font.setColor(Color.YELLOW);
+                font.draw(batch, "> " + options[i], sw / 2 - 30, y);
+            } else {
+                font.setColor(Color.LIGHT_GRAY);
+                font.draw(batch, "  " + options[i], sw / 2 - 30, y);
+            }
+            y -= 16;
+        }
+
+        font.setColor(Color.GRAY);
+        font.draw(batch, "[ENTER] Selecionar", sw / 2 - 55, y - 8);
+
+        font.setColor(Color.WHITE);
+        batch.setColor(Color.WHITE);
+    }
+
+    private void handlePauseInput() {
+        if (Gdx.input.isKeyJustPressed(Input.Keys.ESCAPE)) {
+            paused = false;
+            return;
+        }
+        if (Gdx.input.isKeyJustPressed(Input.Keys.DOWN) || Gdx.input.isKeyJustPressed(Input.Keys.S)) {
+            pauseCursor = (pauseCursor + 1) % 2;
+        }
+        if (Gdx.input.isKeyJustPressed(Input.Keys.UP) || Gdx.input.isKeyJustPressed(Input.Keys.W)) {
+            pauseCursor = (pauseCursor - 1 + 2) % 2;
+        }
+        if (Gdx.input.isKeyJustPressed(Input.Keys.ENTER)) {
+            if (pauseCursor == 0) {
+                paused = false;
+            } else {
+                game.setScreen(new MenuScreen(game));
+                dispose();
+            }
+        }
+    }
+
+    private Texture getPlayerTexture() {
+        switch (currentDirection) {
+            case 0:  return texPlayerDown;
+            case 1:  return texPlayerLeft;
+            case 2:  return texPlayerRight;
+            case 3:  return texPlayerUp;
+            default: return texPlayerDown;
+        }
+    }
+
+    private void drawPartySidebar(SpriteBatch batch, BitmapFont font) {
+        float sx = 0;
+        float sy = 20;
+        float sw = 76;
+        float sh = 190;
+
+        // Fundo semi-transparente (mais escuro no modo seleção)
+        batch.setColor(0, 0, 0, selectingTeam ? 0.85f : 0.75f);
+        batch.draw(game.getPixelWhite(), sx, sy, sw, sh);
+        batch.setColor(Color.WHITE);
+
+        float cy = sy + sh - 8;
+
+        // Título
+        font.setColor(selectingTeam ? Color.ORANGE : Color.YELLOW);
+        font.draw(batch, "TIME", sx + 20, cy);
+        cy -= 16;
+
+        for (int i = 0; i < player.getTeam().size(); i++) {
+            Pokemon p = player.getTeam().get(i);
+            boolean isActive = (p == player.getActivePokemon());
+
+            // Cursor de navegação no modo seleção
+            if (selectingTeam && i == teamCursorIndex) {
+                font.setColor(Color.YELLOW);
+                font.draw(batch, ">", sx + 10, cy);
+            }
+
+            // Nome
+            if (i == firstSwapIndex) {
+                font.setColor(Color.ORANGE);
+            } else if (p.isFainted()) {
+                font.setColor(Color.RED);
+            } else if (isActive) {
+                font.setColor(Color.CYAN);
+            } else {
+                font.setColor(Color.WHITE);
+            }
+            String prefix = isActive ? ">" : " ";
+            font.draw(batch, prefix + p.getName(), sx + 20, cy);
+
+            // Indicador de primeiro selecionado
+            if (i == firstSwapIndex) {
+                font.setColor(Color.ORANGE);
+                font.draw(batch, "<<", sx + sw - 15, cy);
+            }
+
+            // Sprite do Pokémon (14x14)
+            Texture sprite = pokemonSprites.get(p.getName());
+            if (sprite != null) {
+                batch.draw(sprite, sx + 3, cy - 16, 14, 14);
+            }
+
+            // Barra de HP
+            float barW = 48;
+            float barH = 3;
+            float hpRatio = (float) p.getHp() / p.getMaxHp();
+            float barY = cy - 12;
+
+            batch.setColor(Color.DARK_GRAY);
+            batch.draw(game.getPixelWhite(), sx + 20, barY, barW, barH);
+            batch.setColor(hpRatio > 0.5f ? Color.GREEN : hpRatio > 0.2f ? Color.YELLOW : Color.RED);
+            batch.draw(game.getPixelWhite(), sx + 20, barY, barW * hpRatio, barH);
+            batch.setColor(Color.WHITE);
+
+            // Texto de HP
+            font.setColor(Color.WHITE);
+            font.draw(batch, p.getHp() + "/" + p.getMaxHp(), sx + 72, cy - 8);
+
+            cy -= 24;
+        }
+
+        font.setColor(Color.WHITE);
+        batch.setColor(Color.WHITE);
+    }
+
+    private void handleTeamSelectionInput() {
+        if (selectionCooldown > 0) return;
+
+        int maxIndex = player.getTeam().size();
+
+        if (Gdx.input.isKeyJustPressed(Input.Keys.DOWN) || Gdx.input.isKeyJustPressed(Input.Keys.S)) {
+            teamCursorIndex = (teamCursorIndex + 1) % maxIndex;
+            selectionCooldown = 0.2f;
+        }
+        if (Gdx.input.isKeyJustPressed(Input.Keys.UP) || Gdx.input.isKeyJustPressed(Input.Keys.W)) {
+            teamCursorIndex = (teamCursorIndex - 1 + maxIndex) % maxIndex;
+            selectionCooldown = 0.2f;
+        }
+
+        if (Gdx.input.isKeyJustPressed(Input.Keys.ENTER)) {
+            if (firstSwapIndex == -1) {
+                firstSwapIndex = teamCursorIndex;
+            } else if (firstSwapIndex == teamCursorIndex) {
+                firstSwapIndex = -1;
+            } else {
+                ArrayList<Pokemon> team = player.getTeam();
+                Pokemon a = team.get(firstSwapIndex);
+                Pokemon b = team.get(teamCursorIndex);
+                team.set(firstSwapIndex, b);
+                team.set(teamCursorIndex, a);
+                firstSwapIndex = -1;
+                statusMessage = "Ordem trocada!";
+            }
+            selectionCooldown = 0.2f;
+        }
     }
 
     private void handleMovement(float delta) {
@@ -412,7 +655,7 @@ public class DungeonScreen implements Screen {
         if (target.hasEnemy()) {
             Pokemon active = player.getActivePokemon();
             if (active != null) {
-                game.setScreen(new BattleScreen(game, this, active, target.getEnemy(), inventory));
+                game.setScreen(new BattleScreen(game, this, player, active, target.getEnemy(), inventory));
                 return;
             } else {
                 statusMessage = "Seu time desmaiou. Fuja!";
@@ -433,6 +676,14 @@ public class DungeonScreen implements Screen {
         texWall.dispose();
         texDoor.dispose();
         texChest.dispose();
-        if (spriteSheet != null) spriteSheet.dispose();
+        texWater.dispose();
+        texGrass.dispose();
+        texPlayerDown.dispose();
+        texPlayerLeft.dispose();
+        texPlayerRight.dispose();
+        texPlayerUp.dispose();
+        for (Texture t : pokemonSprites.values()) {
+            t.dispose();
+        }
     }
 }

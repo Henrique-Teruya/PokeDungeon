@@ -18,6 +18,7 @@ import com.pokedungeon.game.battle.BattleManager;
 import com.pokedungeon.game.battle.TurnAction;
 import com.pokedungeon.game.inventory.Inventory;
 import com.pokedungeon.game.model.Item;
+import com.pokedungeon.game.model.Player;
 import com.pokedungeon.game.model.Pokemon;
 
 /**
@@ -34,6 +35,7 @@ public class BattleScreen implements Screen {
     private Main game;
     private DungeonScreen dungeonScreen;
     private BattleManager battleManager;
+    private Player player;
     private Inventory inventory;
 
     // Sprites carregados
@@ -45,11 +47,14 @@ public class BattleScreen implements Screen {
     private HashMap<String, String> frontSpriteMap;
     private HashMap<String, String> backSpriteMap;
 
+    // Sprites de todos os pokémons do time (para troca)
+    private HashMap<String, Texture> teamBackSprites;
+
     // Ataques do pokémon do jogador como lista para indexar
     private ArrayList<String> attackNames;
 
     // Estado da UI
-    private enum UIState { CHOOSE_ACTION, CHOOSE_ITEM, PROCESSING, BATTLE_OVER }
+    private enum UIState { CHOOSE_ACTION, CHOOSE_ITEM, CHOOSE_SWITCH, PROCESSING, BATTLE_OVER }
     private UIState uiState;
 
     private int selectedIndex = 0;
@@ -57,10 +62,11 @@ public class BattleScreen implements Screen {
     private static final float INPUT_DELAY = 0.2f;
 
     public BattleScreen(Main game, DungeonScreen dungeonScreen,
-                        Pokemon playerPokemon, Pokemon enemyPokemon,
+                        Player player, Pokemon playerPokemon, Pokemon enemyPokemon,
                         Inventory inventory) {
         this.game = game;
         this.dungeonScreen = dungeonScreen;
+        this.player = player;
         this.inventory = inventory;
         this.battleManager = new BattleManager(playerPokemon, enemyPokemon);
         this.attackNames = new ArrayList<>(playerPokemon.getAttacks().keySet());
@@ -78,12 +84,19 @@ public class BattleScreen implements Screen {
         backSpriteMap.put("Charmander", "sprites/charmandercostas.PNG");
         backSpriteMap.put("Squirtle", "sprites/squirtledecostas.PNG");
 
-        // Carrega sprites usando o HashMap
-        String backPath = backSpriteMap.get(playerPokemon.getName());
-        if (backPath != null) {
-            playerBackSprite = new Texture(Gdx.files.internal(backPath));
-            playerBackSprite.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
+        // Carrega sprites de todos os pokémons do time (para troca em batalha)
+        teamBackSprites = new HashMap<>();
+        for (Pokemon p : player.getTeam()) {
+            String path = backSpriteMap.get(p.getName());
+            if (path != null) {
+                Texture tex = new Texture(Gdx.files.internal(path));
+                tex.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
+                teamBackSprites.put(p.getName(), tex);
+            }
         }
+
+        // Sprite atual do jogador
+        playerBackSprite = teamBackSprites.get(playerPokemon.getName());
 
         String frontPath = frontSpriteMap.get(enemyPokemon.getName());
         if (frontPath != null) {
@@ -236,7 +249,25 @@ public class BattleScreen implements Screen {
             case CHOOSE_ITEM:
                 drawItemMenu(batch, font, textX, textY);
                 break;
+            case CHOOSE_SWITCH:
+                drawSwitchMenu(batch, font, textX, textY);
+                break;
             case PROCESSING:
+                if (!battleManager.isBattleOver()) {
+                    Pokemon current = battleManager.getPlayerPokemon();
+                    if (current.isFainted()) {
+                        Pokemon next = player.getActivePokemon();
+                        if (next != null) {
+                            battleManager.setPlayerPokemon(next);
+                            battleManager.getBattleLog().log(next.getName() + " foi enviado!");
+                            playerBackSprite = teamBackSprites.get(next.getName());
+                            updateAttackNames();
+                        } else {
+                            battleManager.getBattleLog().log("Todos os Pokemon desmaiaram! Perdeu!");
+                            battleManager.forceDefeat();
+                        }
+                    }
+                }
                 uiState = UIState.CHOOSE_ACTION;
                 if (battleManager.isBattleOver()) uiState = UIState.BATTLE_OVER;
                 break;
@@ -275,16 +306,31 @@ public class BattleScreen implements Screen {
         }
 
         // Opção de Item
-        int itemRow = attackNames.size() / 2;
-        float itemX = (attackNames.size() % 2 == 0) ? col1X : col2X;
+        int itemIndex = attackNames.size();
+        int itemRow = itemIndex / 2;
+        float itemX = (itemIndex % 2 == 0) ? col1X : col2X;
         float itemY = startY - itemRow * rowH;
 
-        if (selectedIndex == attackNames.size()) {
+        if (selectedIndex == itemIndex) {
             font.setColor(Color.BLACK);
             font.draw(batch, "> MOCHILA", itemX, itemY);
         } else {
             font.setColor(Color.DARK_GRAY);
             font.draw(batch, "  MOCHILA", itemX, itemY);
+        }
+
+        // Opção de Trocar
+        int trocarIndex = attackNames.size() + 1;
+        int trocarRow = trocarIndex / 2;
+        float trocarX = (trocarIndex % 2 == 0) ? col1X : col2X;
+        float trocarY = startY - trocarRow * rowH;
+
+        if (selectedIndex == trocarIndex) {
+            font.setColor(Color.BLACK);
+            font.draw(batch, "> TROCAR", trocarX, trocarY);
+        } else {
+            font.setColor(Color.DARK_GRAY);
+            font.draw(batch, "  TROCAR", trocarX, trocarY);
         }
     }
 
@@ -309,6 +355,40 @@ public class BattleScreen implements Screen {
             font.setColor(Color.GRAY);
             font.draw(batch, "[ESC] Voltar", startX + 160, startY);
         }
+    }
+
+    private void drawSwitchMenu(SpriteBatch batch, BitmapFont font, float startX, float startY) {
+        font.setColor(Color.BLACK);
+        font.draw(batch, "Para qual Pokemon?", startX, startY);
+        float y = startY - 16;
+
+        for (int i = 0; i < player.getTeam().size(); i++) {
+            Pokemon p = player.getTeam().get(i);
+            boolean isCurrent = (p == battleManager.getPlayerPokemon());
+
+            if (i == selectedIndex) {
+                font.setColor(Color.BLACK);
+                font.draw(batch, ">", startX, y);
+            }
+
+            if (p.isFainted()) {
+                font.setColor(Color.RED);
+            } else if (isCurrent) {
+                font.setColor(Color.LIGHT_GRAY);
+            } else {
+                font.setColor(Color.BLACK);
+            }
+            font.draw(batch, p.getName() + " HP:" + p.getHp() + "/" + p.getMaxHp(),
+                startX + 15, y);
+
+            if (isCurrent) {
+                font.draw(batch, "(ATUAL)", startX + 140, y);
+            }
+            y -= 14;
+        }
+
+        font.setColor(Color.GRAY);
+        font.draw(batch, "[ESC] Voltar", startX, y - 4);
     }
 
     private void drawBattleOver(SpriteBatch batch, BitmapFont font, float startX, float startY) {
@@ -343,6 +423,12 @@ public class BattleScreen implements Screen {
         }
     }
 
+    // ========== HELPERS ==========
+
+    private void updateAttackNames() {
+        this.attackNames = new ArrayList<>(battleManager.getPlayerPokemon().getAttacks().keySet());
+    }
+
     // ========== INPUT ==========
 
     private void handleInput() {
@@ -351,6 +437,7 @@ public class BattleScreen implements Screen {
         switch (uiState) {
             case CHOOSE_ACTION: handleActionInput(); break;
             case CHOOSE_ITEM: handleItemInput(); break;
+            case CHOOSE_SWITCH: handleSwitchInput(); break;
             case BATTLE_OVER:
                 if (Gdx.input.isKeyJustPressed(Input.Keys.ENTER)) {
                     game.setScreen(dungeonScreen);
@@ -361,7 +448,7 @@ public class BattleScreen implements Screen {
     }
 
     private void handleActionInput() {
-        int maxIndex = attackNames.size();
+        int maxIndex = attackNames.size() + 1; // +1 for TROCAR (MOCHILA is already in the +1 range)
 
         if (Gdx.input.isKeyPressed(Input.Keys.UP) || Gdx.input.isKeyPressed(Input.Keys.W)) {
             selectedIndex = (selectedIndex - 1 + maxIndex + 1) % (maxIndex + 1);
@@ -389,9 +476,12 @@ public class BattleScreen implements Screen {
                 battleManager.enqueueEnemyAction();
                 battleManager.processTurn();
                 uiState = UIState.PROCESSING;
-            } else {
+            } else if (selectedIndex == attackNames.size()) {
                 selectedIndex = 0;
                 uiState = UIState.CHOOSE_ITEM;
+            } else {
+                selectedIndex = 0;
+                uiState = UIState.CHOOSE_SWITCH;
             }
             inputCooldown = INPUT_DELAY;
         }
@@ -409,6 +499,50 @@ public class BattleScreen implements Screen {
                 inputCooldown = INPUT_DELAY;
                 return;
             }
+        }
+    }
+
+    private void handleSwitchInput() {
+        int maxIndex = player.getTeam().size();
+
+        if (Gdx.input.isKeyJustPressed(Input.Keys.ESCAPE)) {
+            selectedIndex = 0;
+            uiState = UIState.CHOOSE_ACTION;
+            inputCooldown = INPUT_DELAY;
+            return;
+        }
+
+        if (maxIndex <= 1) {
+            selectedIndex = 0;
+            uiState = UIState.CHOOSE_ACTION;
+            inputCooldown = INPUT_DELAY;
+            return;
+        }
+
+        if (Gdx.input.isKeyPressed(Input.Keys.UP) || Gdx.input.isKeyPressed(Input.Keys.W)) {
+            selectedIndex = (selectedIndex - 1 + maxIndex) % maxIndex;
+            inputCooldown = INPUT_DELAY;
+        }
+        if (Gdx.input.isKeyPressed(Input.Keys.DOWN) || Gdx.input.isKeyPressed(Input.Keys.S)) {
+            selectedIndex = (selectedIndex + 1) % maxIndex;
+            inputCooldown = INPUT_DELAY;
+        }
+
+        if (Gdx.input.isKeyJustPressed(Input.Keys.ENTER)) {
+            Pokemon target = player.getTeam().get(selectedIndex);
+            Pokemon current = battleManager.getPlayerPokemon();
+
+            if (!target.isFainted() && target != current) {
+                TurnAction switchAction = TurnAction.switchPkm(current, target);
+                battleManager.enqueuePlayerAction(switchAction);
+                battleManager.enqueueEnemyAction();
+                battleManager.processTurn();
+                playerBackSprite = teamBackSprites.get(target.getName());
+                updateAttackNames();
+                selectedIndex = 0;
+                uiState = UIState.PROCESSING;
+            }
+            inputCooldown = INPUT_DELAY;
         }
     }
 
@@ -455,8 +589,10 @@ public class BattleScreen implements Screen {
 
     @Override
     public void dispose() {
-        if (playerBackSprite != null) playerBackSprite.dispose();
         if (enemyFrontSprite != null) enemyFrontSprite.dispose();
         if (dialogBox != null) dialogBox.dispose();
+        for (Texture t : teamBackSprites.values()) {
+            t.dispose();
+        }
     }
 }

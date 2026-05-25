@@ -88,13 +88,18 @@ public class BattleManager {
 
         switch (action.getType()) {
             case ATTACK:
+                Pokemon target = action.getTarget();
+                // Se o inimigo ataca, sempre acerta o playerPokemon atual (para troca em batalha)
+                if (action.getSource() == enemyPokemon) {
+                    target = playerPokemon;
+                }
                 int damage = action.getSource().getAttackDamage(action.getAttackName());
-                action.getTarget().takeDamage(damage);
+                target.takeDamage(damage);
 
                 String attackMsg = action.getSource().getName() + " usou "
                     + action.getAttackName() + "! Causou " + damage + " de dano. "
-                    + action.getTarget().getName() + " ficou com "
-                    + action.getTarget().getHp() + " HP.";
+                    + target.getName() + " ficou com "
+                    + target.getHp() + " HP.";
                 battleLog.log(attackMsg);
                 break;
 
@@ -106,20 +111,38 @@ public class BattleManager {
                     + action.getTarget().getHp() + "/" + action.getTarget().getMaxHp();
                 battleLog.log(itemMsg);
                 break;
+
+            case SWITCH:
+                playerPokemon = action.getSwitchTarget();
+                String switchMsg = playerPokemon.getName() + " entrou na batalha!";
+                battleLog.log(switchMsg);
+                break;
         }
     }
 
     /**
-     * Verifica se a batalha acabou.
+     * Verifica se a batalha acabou (inimigo derrotado).
+     * A derrota do jogador é tratada na BattleScreen com auto-switch.
      */
     private void checkBattleEnd() {
-        if (playerPokemon.isFainted()) {
-            battleLog.log(playerPokemon.getName() + " foi derrotado! Você perdeu.");
-            battleOver = true;
-        } else if (enemyPokemon.isFainted()) {
+        if (enemyPokemon.isFainted()) {
             battleLog.log(enemyPokemon.getName() + " foi derrotado! Você venceu!");
             battleOver = true;
         }
+    }
+
+    /**
+     * Troca o Pokémon ativo do jogador em batalha.
+     */
+    public void setPlayerPokemon(Pokemon pkm) {
+        this.playerPokemon = pkm;
+    }
+
+    /**
+     * Força a derrota quando todos os Pokémon do time desmaiaram.
+     */
+    public void forceDefeat() {
+        battleOver = true;
     }
 
     // --- Getters ---

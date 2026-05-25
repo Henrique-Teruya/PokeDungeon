@@ -17,7 +17,8 @@ public class TurnAction {
      */
     public enum ActionType {
         ATTACK,
-        USE_ITEM
+        USE_ITEM,
+        SWITCH
     }
 
     private ActionType type;
@@ -25,6 +26,7 @@ public class TurnAction {
     private Pokemon target;      // quem recebe a ação
     private String attackName;   // nome do ataque (se ATTACK)
     private Item item;           // item usado (se USE_ITEM)
+    private Pokemon switchTarget; // pokémon para trocar (se SWITCH)
 
     /**
      * Cria uma ação de ataque.
@@ -59,6 +61,21 @@ public class TurnAction {
         return action;
     }
 
+    /**
+     * Cria uma ação de trocar de Pokémon.
+     *
+     * @param current      pokémon atual que será trocado
+     * @param switchTarget pokémon que entrará na batalha
+     * @return ação de troca configurada
+     */
+    public static TurnAction switchPkm(Pokemon current, Pokemon switchTarget) {
+        TurnAction action = new TurnAction();
+        action.type = ActionType.SWITCH;
+        action.source = current;
+        action.switchTarget = switchTarget;
+        return action;
+    }
+
     // --- Getters ---
 
     public ActionType getType() {
@@ -81,12 +98,18 @@ public class TurnAction {
         return item;
     }
 
+    public Pokemon getSwitchTarget() {
+        return switchTarget;
+    }
+
     @Override
     public String toString() {
         if (type == ActionType.ATTACK) {
             return source.getName() + " usou " + attackName + " em " + target.getName();
-        } else {
+        } else if (type == ActionType.USE_ITEM) {
             return source.getName() + " usou " + item.getName();
+        } else {
+            return source.getName() + " trocado por " + switchTarget.getName();
         }
     }
 }

@@ -4,6 +4,7 @@ import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
 import com.badlogic.gdx.Screen;
 import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.GlyphLayout;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
@@ -15,6 +16,7 @@ public class MenuScreen implements Screen {
 
     private Main game;
     private GlyphLayout layout;
+    private Texture personagemSprite;
 
     private String[] menuOptions = {"JOGAR", "SAIR"};
     private int selectedOption = 0;
@@ -24,6 +26,8 @@ public class MenuScreen implements Screen {
     public MenuScreen(Main game) {
         this.game = game;
         this.layout = new GlyphLayout();
+        personagemSprite = new Texture(Gdx.files.internal("sprites/personagem.PNG"));
+        personagemSprite.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
     }
 
     @Override
@@ -55,6 +59,12 @@ public class MenuScreen implements Screen {
         float boxY = (sh - boxHeight) / 2 - 20;
 
         batch.begin();
+
+        // Sprite do personagem centralizado acima do menu
+        float spriteSize = 48;
+        float spriteX = (sw - spriteSize) / 2;
+        float spriteY = boxY + boxHeight + 10;
+        batch.draw(personagemSprite, spriteX, spriteY, spriteSize, spriteSize);
 
         // Fundo da caixa (Usando placeholder branco)
         batch.setColor(0.15f, 0.15f, 0.22f, 1f);
@@ -123,5 +133,5 @@ public class MenuScreen implements Screen {
     @Override public void pause() {}
     @Override public void resume() {}
     @Override public void hide() {}
-    @Override public void dispose() {}
+    @Override public void dispose() { personagemSprite.dispose(); }
 }
