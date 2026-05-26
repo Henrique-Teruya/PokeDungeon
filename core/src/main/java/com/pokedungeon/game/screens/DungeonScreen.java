@@ -35,6 +35,10 @@ public class DungeonScreen implements Screen {
     
     // Sprites do jogador por direção
     private Texture texPlayerDown, texPlayerLeft, texPlayerRight, texPlayerUp;
+    private Texture texPlayerDownWalk1, texPlayerDownWalk2;
+    private Texture texPlayerLeftWalk1, texPlayerLeftWalk2;
+    private Texture texPlayerRightWalk1, texPlayerRightWalk2;
+    private Texture texPlayerUpWalk1, texPlayerUpWalk2;
     private int currentDirection = 0; // 0=Baixo, 1=Esquerda, 2=Direita, 3=Cima
     private float stateTime = 0f;
     private boolean isMoving = false;
@@ -145,6 +149,15 @@ public class DungeonScreen implements Screen {
         texPlayerLeft = new Texture(Gdx.files.internal("sprites/player/player_left.png"));
         texPlayerRight = new Texture(Gdx.files.internal("sprites/player/player_right.png"));
         texPlayerUp = new Texture(Gdx.files.internal("sprites/player/player_up.png"));
+        
+        texPlayerDownWalk1 = new Texture(Gdx.files.internal("sprites/player/player_down_walk1.png"));
+        texPlayerDownWalk2 = new Texture(Gdx.files.internal("sprites/player/player_down_walk2.png"));
+        texPlayerLeftWalk1 = new Texture(Gdx.files.internal("sprites/player/player_left_walk1.png"));
+        texPlayerLeftWalk2 = new Texture(Gdx.files.internal("sprites/player/player_left_walk2.png"));
+        texPlayerRightWalk1 = new Texture(Gdx.files.internal("sprites/player/player_right_walk1.png"));
+        texPlayerRightWalk2 = new Texture(Gdx.files.internal("sprites/player/player_right_walk2.png"));
+        texPlayerUpWalk1 = new Texture(Gdx.files.internal("sprites/player/player_up_walk1.png"));
+        texPlayerUpWalk2 = new Texture(Gdx.files.internal("sprites/player/player_up_walk2.png"));
         
         buildRoomMap();
     }
@@ -426,12 +439,37 @@ public class DungeonScreen implements Screen {
     }
 
     private Texture getPlayerTexture() {
-        switch (currentDirection) {
-            case 0:  return texPlayerDown;
-            case 1:  return texPlayerLeft;
-            case 2:  return texPlayerRight;
-            case 3:  return texPlayerUp;
-            default: return texPlayerDown;
+        if (!isMoving) {
+            switch (currentDirection) {
+                case 0:  return texPlayerDown;
+                case 1:  return texPlayerLeft;
+                case 2:  return texPlayerRight;
+                case 3:  return texPlayerUp;
+                default: return texPlayerDown;
+            }
+        } else {
+            // Alterna os sprites a cada 0.15 segundos para formar o ciclo de caminhada
+            int frame = (int) (stateTime / 0.15f) % 4;
+            switch (currentDirection) {
+                case 0:
+                    if (frame == 0) return texPlayerDownWalk1;
+                    if (frame == 2) return texPlayerDownWalk2;
+                    return texPlayerDown;
+                case 1:
+                    if (frame == 0) return texPlayerLeftWalk1;
+                    if (frame == 2) return texPlayerLeftWalk2;
+                    return texPlayerLeft;
+                case 2:
+                    if (frame == 0) return texPlayerRightWalk1;
+                    if (frame == 2) return texPlayerRightWalk2;
+                    return texPlayerRight;
+                case 3:
+                    if (frame == 0) return texPlayerUpWalk1;
+                    if (frame == 2) return texPlayerUpWalk2;
+                    return texPlayerUp;
+                default:
+                    return texPlayerDown;
+            }
         }
     }
 
@@ -682,6 +720,14 @@ public class DungeonScreen implements Screen {
         texPlayerLeft.dispose();
         texPlayerRight.dispose();
         texPlayerUp.dispose();
+        texPlayerDownWalk1.dispose();
+        texPlayerDownWalk2.dispose();
+        texPlayerLeftWalk1.dispose();
+        texPlayerLeftWalk2.dispose();
+        texPlayerRightWalk1.dispose();
+        texPlayerRightWalk2.dispose();
+        texPlayerUpWalk1.dispose();
+        texPlayerUpWalk2.dispose();
         for (Texture t : pokemonSprites.values()) {
             t.dispose();
         }
