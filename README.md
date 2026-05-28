@@ -4,6 +4,16 @@ A [libGDX](https://libgdx.com/) project generated with [gdx-liftoff](https://git
 
 This project was generated with a template including simple application launchers and an `ApplicationAdapter` extension that draws libGDX logo.
 
+## How to Run
+
+To run the project on your desktop, use the following command in your terminal:
+
+```bash
+./gradlew lwjgl3:run
+```
+
+**Note:** Ensure you have JDK 17 or higher installed.
+
 ## Platforms
 
 - `core`: Main module with the application logic shared by all platforms.
