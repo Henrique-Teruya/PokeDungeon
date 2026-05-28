@@ -26,7 +26,7 @@ public class MenuScreen implements Screen {
     public MenuScreen(Main game) {
         this.game = game;
         this.layout = new GlyphLayout();
-        personagemSprite = new Texture(Gdx.files.internal("sprites/personagem.PNG"));
+        personagemSprite = new Texture(Gdx.files.internal("sprites/player/player_down.png"));
         personagemSprite.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
     }
 
