@@ -276,35 +276,45 @@ public class DungeonScreen implements Screen {
         }
         
         Random rand = new Random(current.getId() * 1000L);
-        if (rand.nextInt(100) < 60) { // 60% chance of a lake
-            int lakeW = rand.nextInt(4) + 3; // 3 to 6 width
-            int lakeH = rand.nextInt(3) + 2; // 2 to 4 height
-            int lakeX = rand.nextInt(MAP_COLS - lakeW - 1) + 1;
-            int lakeY = rand.nextInt(MAP_ROWS - lakeH - 1) + 1;
-            for(int c = lakeX; c < lakeX + lakeW; c++) {
-                for(int r = lakeY; r < lakeY + lakeH; r++) {
-                    waterMap[c][r] = true;
+        // Tentamos posicionar o lago até 10 vezes para não sobrepor portas ou baús
+            for (int attempt = 0; attempt < 10; attempt++) {
+                int lakeW = rand.nextInt(4) + 3; // 3 to 6 width
+                int lakeH = rand.nextInt(3) + 2; // 2 to 4 height
+                int lakeX = rand.nextInt(MAP_COLS - lakeW - 1) + 1;
+                int lakeY = rand.nextInt(MAP_ROWS - lakeH - 1) + 1;
+                
+                boolean overlap = false;
+                int checkX1 = lakeX - 1;
+                int checkX2 = lakeX + lakeW;
+                int checkY1 = lakeY - 1;
+                int checkY2 = lakeY + lakeH;
+                
+                for (DoorPoint d : currentDoors) {
+                    if (d.col >= checkX1 && d.col <= checkX2 && d.row >= checkY1 && d.row <= checkY2) {
+                        overlap = true;
+                        break;
+                    }
+                }
+                if (chestCol != -1 && chestCol >= checkX1 && chestCol <= checkX2 && chestRow >= checkY1 && chestRow <= checkY2) {
+                    overlap = true;
+                }
+                
+                // Protege o centro para o spawn inicial
+                int cx = MAP_COLS / 2;
+                int cy = MAP_ROWS / 2;
+                if (cx >= checkX1 && cx <= checkX2 && cy >= checkY1 && cy <= checkY2) {
+                    overlap = true;
+                }
+                
+                if (!overlap) {
+                    for(int c = lakeX; c < lakeX + lakeW; c++) {
+                        for(int r = lakeY; r < lakeY + lakeH; r++) {
+                            waterMap[c][r] = true;
+                        }
+                    }
+                    break; // Posicionado com sucesso
                 }
             }
-            // Clear water near doors and chests
-            for (DoorPoint d : currentDoors) {
-                if (d.col >= 0 && d.col < MAP_COLS && d.row >= 0 && d.row < MAP_ROWS) {
-                    waterMap[d.col][d.row] = false;
-                    // Also clear adjacent so you don't step right into water
-                    if (d.col > 0) waterMap[d.col-1][d.row] = false;
-                    if (d.col < MAP_COLS-1) waterMap[d.col+1][d.row] = false;
-                    if (d.row > 0) waterMap[d.col][d.row-1] = false;
-                    if (d.row < MAP_ROWS-1) waterMap[d.col][d.row+1] = false;
-                }
-            }
-            if (chestCol != -1 && chestRow != -1) {
-                waterMap[chestCol][chestRow] = false;
-                if (chestCol > 0) waterMap[chestCol-1][chestRow] = false;
-                if (chestCol < MAP_COLS-1) waterMap[chestCol+1][chestRow] = false;
-                if (chestRow > 0) waterMap[chestCol][chestRow-1] = false;
-                if (chestRow < MAP_ROWS-1) waterMap[chestCol][chestRow+1] = false;
-            }
-        }
     }
 
     @Override
