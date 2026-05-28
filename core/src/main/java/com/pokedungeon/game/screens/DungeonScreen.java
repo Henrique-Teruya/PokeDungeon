@@ -142,10 +142,19 @@ public class DungeonScreen implements Screen {
         DungeonGraph graph = new DungeonGraph();
 
         Room entrance = new Room(0, "Entrada", "A entrada escura da dungeon.");
+        entrance.setMapX(0); entrance.setMapY(0);
+        
         Room corridor = new Room(1, "Corredor", "Um corredor longo e úmido.");
+        corridor.setMapX(0); corridor.setMapY(1);
+        
         Room treasure = new Room(2, "Sala do Tesouro", "Uma sala com um baú!");
+        treasure.setMapX(1); treasure.setMapY(0);
+        
         Room arena = new Room(3, "Arena", "Uma arena de batalha antiga.");
+        arena.setMapX(0); arena.setMapY(2);
+        
         Room bossRoom = new Room(4, "Sala do Chefe", "O covil do chefe!");
+        bossRoom.setMapX(0); bossRoom.setMapY(3);
 
         treasure.setItem(new Item("Poção Máxima", 60));
 
@@ -435,6 +444,8 @@ public class DungeonScreen implements Screen {
             font.draw(batch, "[TAB] Menu | [ESC] Sair", viewport.getWorldWidth() - 165, 14);
         }
 
+        drawMiniMap(batch, viewport);
+
         if (paused) {
             drawPauseMenu(batch, font, viewport);
         }
@@ -495,6 +506,79 @@ public class DungeonScreen implements Screen {
                 dispose();
             }
         }
+    }
+
+    private void drawMiniMap(SpriteBatch batch, Viewport viewport) {
+        float sw = viewport.getWorldWidth();
+        float sh = viewport.getWorldHeight();
+        
+        // Área do minimapa no canto superior direito
+        float mapSize = 64f; // tamanho base da área de desenho do mapa
+        float startX = sw - mapSize - 10;
+        float startY = sh - mapSize - 10;
+        
+        // Fundo do minimapa
+        batch.setColor(0, 0, 0, 0.6f);
+        batch.draw(game.getPixelWhite(), startX - 5, startY - 5, mapSize + 10, mapSize + 10);
+        batch.setColor(Color.WHITE);
+
+        DungeonGraph graph = dungeonManager.getGraph();
+        Room current = dungeonManager.getCurrentRoom();
+        
+        float cellSize = 8f; // Tamanho de cada bloco de sala
+        float spacing = 16f; // Distância entre as salas
+        
+        // Vamos centralizar o minimapa na sala (0,0) ou na sala atual para que fique dinâmico?
+        // Como o mapa é pequeno, usaremos um offset fixo baseado no (0,0) ficando na parte inferior esquerda do minimapa.
+        float offsetX = startX + 16f;
+        float offsetY = startY + 16f;
+        
+        // 1) Desenha as conexões primeiro (linhas)
+        batch.setColor(Color.GRAY);
+        for (Room r : graph.getAllRooms()) {
+            if (r.isVisited()) {
+                for (Room neighbor : graph.getNeighbors(r)) {
+                    if (neighbor.isVisited()) {
+                        float x1 = offsetX + r.getMapX() * spacing + cellSize / 2f;
+                        float y1 = offsetY + r.getMapY() * spacing + cellSize / 2f;
+                        float x2 = offsetX + neighbor.getMapX() * spacing + cellSize / 2f;
+                        float y2 = offsetY + neighbor.getMapY() * spacing + cellSize / 2f;
+                        
+                        // Desenha uma linha usando o pixelWhite
+                        // Para simplificar, como o mapa é ortogonal, só desenhamos retângulos
+                        float minX = Math.min(x1, x2);
+                        float maxX = Math.max(x1, x2);
+                        float minY = Math.min(y1, y2);
+                        float maxY = Math.max(y1, y2);
+                        
+                        if (minX == maxX) {
+                            // Linha vertical
+                            batch.draw(game.getPixelWhite(), minX - 1, minY, 2, maxY - minY);
+                        } else {
+                            // Linha horizontal
+                            batch.draw(game.getPixelWhite(), minX, minY - 1, maxX - minX, 2);
+                        }
+                    }
+                }
+            }
+        }
+        
+        // 2) Desenha as salas
+        for (Room r : graph.getAllRooms()) {
+            if (r.isVisited()) {
+                float rx = offsetX + r.getMapX() * spacing;
+                float ry = offsetY + r.getMapY() * spacing;
+                
+                if (r.equals(current)) {
+                    batch.setColor(Color.CYAN); // Sala atual
+                } else {
+                    batch.setColor(Color.LIGHT_GRAY); // Sala visitada
+                }
+                
+                batch.draw(game.getPixelWhite(), rx, ry, cellSize, cellSize);
+            }
+        }
+        batch.setColor(Color.WHITE);
     }
 
     private Texture getPlayerTexture() {

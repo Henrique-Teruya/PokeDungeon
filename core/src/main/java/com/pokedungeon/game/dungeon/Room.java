@@ -21,6 +21,10 @@ public class Room {
     private Pokemon enemy;   // pokémon inimigo (pode ser null)
     private Item item;       // item na sala (pode ser null)
     private boolean visited;
+    
+    // Coordenadas lógicas do minimapa
+    private int mapX;
+    private int mapY;
 
     /**
      * Cria uma nova sala.
@@ -100,6 +104,22 @@ public class Room {
 
     public void setVisited(boolean visited) {
         this.visited = visited;
+    }
+
+    public int getMapX() {
+        return mapX;
+    }
+
+    public void setMapX(int mapX) {
+        this.mapX = mapX;
+    }
+
+    public int getMapY() {
+        return mapY;
+    }
+
+    public void setMapY(int mapY) {
+        this.mapY = mapY;
     }
 
     @Override
