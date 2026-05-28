@@ -27,4 +27,13 @@ tiles/floor.png
 tiles/grass.png
 tiles/wall.png
 tiles/water.png
+tiles/water_center.png
+tiles/water_e.png
+tiles/water_n.png
+tiles/water_ne.png
+tiles/water_nw.png
+tiles/water_s.png
+tiles/water_se.png
+tiles/water_sw.png
+tiles/water_w.png
 ui/barratexto.PNG

@@ -143,10 +143,6 @@ public class BattleScreen implements Screen {
         batch.begin();
 
         // ========== CENÁRIO DA BATALHA ==========
-
-        // Chão da arena (faixa escura na base da área de batalha)
-        batch.setColor(0.45f, 0.62f, 0.35f, 1f);
-        batch.draw(game.getPixelWhite(), 0, dialogH, sw, battleAreaH * 0.4f);
         batch.setColor(Color.WHITE);
 
         // --- Sprite do inimigo (topo-direita, 64x64 escalado para 56x56 na virtual) ---

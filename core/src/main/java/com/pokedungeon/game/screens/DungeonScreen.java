@@ -2,6 +2,7 @@ package com.pokedungeon.game.screens;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Random;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
@@ -32,6 +33,7 @@ public class DungeonScreen implements Screen {
 
     // Texturas visuais
     private Texture texFloor, texWall, texDoor, texChest, texWater, texGrass;
+    private Texture texWaterN, texWaterS, texWaterE, texWaterW, texWaterNW, texWaterNE, texWaterSW, texWaterSE, texWaterCenter;
     
     // Sprites do jogador por direção
     private Texture texPlayerDown, texPlayerLeft, texPlayerRight, texPlayerUp;
@@ -48,6 +50,8 @@ public class DungeonScreen implements Screen {
     private final int TILE = 32;
     private final int MAP_COLS = 13; // 13 * 32 = 416 px
     private final int MAP_ROWS = 7;  // 7 * 32 = 224 px
+
+    private boolean[][] waterMap = new boolean[MAP_COLS][MAP_ROWS];
 
     private String statusMessage = "";
 
@@ -83,6 +87,27 @@ public class DungeonScreen implements Screen {
         texChest = new Texture(Gdx.files.internal("tiles/chest.png"));
         texWater = new Texture(Gdx.files.internal("tiles/water.png"));
         texGrass = new Texture(Gdx.files.internal("tiles/grass.png"));
+
+        // Texturas de lago (Autotiling)
+        texWaterCenter = new Texture(Gdx.files.internal("tiles/water_center.png"));
+        texWaterN = new Texture(Gdx.files.internal("tiles/water_n.png"));
+        texWaterS = new Texture(Gdx.files.internal("tiles/water_s.png"));
+        texWaterE = new Texture(Gdx.files.internal("tiles/water_e.png"));
+        texWaterW = new Texture(Gdx.files.internal("tiles/water_w.png"));
+        texWaterNW = new Texture(Gdx.files.internal("tiles/water_nw.png"));
+        texWaterNE = new Texture(Gdx.files.internal("tiles/water_ne.png"));
+        texWaterSW = new Texture(Gdx.files.internal("tiles/water_sw.png"));
+        texWaterSE = new Texture(Gdx.files.internal("tiles/water_se.png"));
+
+        // Filtro Nearest para todos os tiles
+        Texture[] allTiles = {
+            texFloor, texWall, texDoor, texChest, texWater, texGrass,
+            texWaterCenter, texWaterN, texWaterS, texWaterE, texWaterW,
+            texWaterNW, texWaterNE, texWaterSW, texWaterSE
+        };
+        for (Texture t : allTiles) {
+            t.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
+        }
 
         initializeGame();
     }
@@ -233,6 +258,44 @@ public class DungeonScreen implements Screen {
             playerX = (MAP_COLS / 2) * TILE;
             playerY = (MAP_ROWS / 2) * TILE - 20; 
         }
+
+        // Generate water map for this room
+        for(int c=0; c<MAP_COLS; c++) {
+            for(int r=0; r<MAP_ROWS; r++) {
+                waterMap[c][r] = false;
+            }
+        }
+        
+        Random rand = new Random(current.getId() * 1000L);
+        if (rand.nextInt(100) < 60) { // 60% chance of a lake
+            int lakeW = rand.nextInt(4) + 3; // 3 to 6 width
+            int lakeH = rand.nextInt(3) + 2; // 2 to 4 height
+            int lakeX = rand.nextInt(MAP_COLS - lakeW - 1) + 1;
+            int lakeY = rand.nextInt(MAP_ROWS - lakeH - 1) + 1;
+            for(int c = lakeX; c < lakeX + lakeW; c++) {
+                for(int r = lakeY; r < lakeY + lakeH; r++) {
+                    waterMap[c][r] = true;
+                }
+            }
+            // Clear water near doors and chests
+            for (DoorPoint d : currentDoors) {
+                if (d.col >= 0 && d.col < MAP_COLS && d.row >= 0 && d.row < MAP_ROWS) {
+                    waterMap[d.col][d.row] = false;
+                    // Also clear adjacent so you don't step right into water
+                    if (d.col > 0) waterMap[d.col-1][d.row] = false;
+                    if (d.col < MAP_COLS-1) waterMap[d.col+1][d.row] = false;
+                    if (d.row > 0) waterMap[d.col][d.row-1] = false;
+                    if (d.row < MAP_ROWS-1) waterMap[d.col][d.row+1] = false;
+                }
+            }
+            if (chestCol != -1 && chestRow != -1) {
+                waterMap[chestCol][chestRow] = false;
+                if (chestCol > 0) waterMap[chestCol-1][chestRow] = false;
+                if (chestCol < MAP_COLS-1) waterMap[chestCol+1][chestRow] = false;
+                if (chestRow > 0) waterMap[chestCol][chestRow-1] = false;
+                if (chestRow < MAP_ROWS-1) waterMap[chestCol][chestRow+1] = false;
+            }
+        }
     }
 
     @Override
@@ -307,14 +370,10 @@ public class DungeonScreen implements Screen {
                 
                 if (isWall(c, r)) {
                     batch.draw(texWall, px, py, TILE, TILE);
-                } else {
-                    // Decoração do chão com grama e água
-                    int roomSeed = dungeonManager.getCurrentRoom().getId() * 100 + c * 10 + r;
-                    if (roomSeed % 17 == 0) {
-                        batch.draw(texGrass, px, py, TILE, TILE);
-                    } else if (roomSeed % 13 == 0) {
-                        batch.draw(texWater, px, py, TILE, TILE);
-                    }
+                } else if (isWater(c, r)) {
+                    batch.draw(getWaterTexture(c, r), px, py, TILE, TILE);
+                } else if (isGrass(c, r)) {
+                    batch.draw(texGrass, px, py, TILE, TILE);
                 }
             }
         }
@@ -478,11 +537,6 @@ public class DungeonScreen implements Screen {
         float sy = 20;
         float sw = 76;
         float sh = 190;
-
-        // Fundo semi-transparente (mais escuro no modo seleção)
-        batch.setColor(0, 0, 0, selectingTeam ? 0.85f : 0.75f);
-        batch.draw(game.getPixelWhite(), sx, sy, sw, sh);
-        batch.setColor(Color.WHITE);
 
         float cy = sy + sh - 8;
 
@@ -671,6 +725,41 @@ public class DungeonScreen implements Screen {
         return false;
     }
 
+    private boolean isWater(int c, int r) {
+        if (c < 0 || c >= MAP_COLS || r < 0 || r >= MAP_ROWS) return false;
+        if (isWall(c, r)) return false;
+        return waterMap[c][r];
+    }
+
+    private boolean isGrass(int c, int r) {
+        if (isWall(c, r) || isWater(c, r)) return false;
+        int roomSeed = dungeonManager.getCurrentRoom().getId() * 100 + c * 10 + r;
+        return roomSeed % 17 == 0;
+    }
+
+    private Texture getWaterTexture(int c, int r) {
+        boolean n = isWater(c, r + 1);
+        boolean s = isWater(c, r - 1);
+        boolean w = isWater(c - 1, r);
+        boolean e = isWater(c + 1, r);
+
+        if (!n && !s && !w && !e) return texWater; // Bloco de água isolado
+        
+        // Cantos Externos (Onde NÃO tem água em duas direções adjacentes)
+        if (!n && !w && e && s) return texWaterNW; // Canto Superior Esquerdo do lago
+        if (!n && !e && w && s) return texWaterNE; // Canto Superior Direito
+        if (!s && !w && e && n) return texWaterSW; // Canto Inferior Esquerdo
+        if (!s && !e && w && n) return texWaterSE; // Canto Inferior Direito
+        
+        // Bordas (Onde NÃO tem água em apenas uma direção)
+        if (!n) return texWaterN; // Borda Norte do lago
+        if (!s) return texWaterS; // Borda Sul
+        if (!w) return texWaterW; // Borda Oeste
+        if (!e) return texWaterE; // Borda Leste
+        
+        return texWaterCenter; // Rodeado de água
+    }
+
     private void enterRoom(Room target, int directionUsed) {
         Room prevRoom = dungeonManager.canGoBack() ? dungeonManager.getRoomHistory().peek() : null;
         
@@ -716,6 +805,15 @@ public class DungeonScreen implements Screen {
         texChest.dispose();
         texWater.dispose();
         texGrass.dispose();
+        texWaterCenter.dispose();
+        texWaterN.dispose();
+        texWaterS.dispose();
+        texWaterE.dispose();
+        texWaterW.dispose();
+        texWaterNW.dispose();
+        texWaterNE.dispose();
+        texWaterSW.dispose();
+        texWaterSE.dispose();
         texPlayerDown.dispose();
         texPlayerLeft.dispose();
         texPlayerRight.dispose();
