@@ -1,5 +1,4 @@
 fonts/PressStart2P-Regular.ttf
-hs_err_pid3114.log
 libgdx.png
 sprites/charmander.PNG
 sprites/charmandercostas.PNG

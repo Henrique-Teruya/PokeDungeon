@@ -1,0 +1,29 @@
+# Gradle build artifacts
+build/
+.gradle/
+local.properties
+
+# IDE
+.idea/workspace.xml
+.idea/tasks/
+.idea/gradle.xml
+.idea/dictionaries/
+.idea/libraries/
+.project
+.classpath
+.settings/
+bin/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Compiled Java
+*.class
+
+# JARs (not dependencies)
+*.jar
+!gradle/wrapper/gradle-wrapper.jar
