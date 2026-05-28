@@ -275,15 +275,15 @@ public class DungeonScreen implements Screen {
             }
         }
         
-        Random rand = new Random();
+        Random rand = new Random(current.getId() * 1000L);
         int numLakes = rand.nextInt(3) + 1; // 1 to 3 lakes
         int lakesPlaced = 0;
         
         // Tentamos posicionar os lagos, com mais tentativas para não sobrepor portas ou baús
         for (int l = 0; l < numLakes; l++) {
             for (int attempt = 0; attempt < 50; attempt++) {
-                int lakeW = rand.nextInt(5) + 2; // 2 to 6 width
-                int lakeH = rand.nextInt(4) + 2; // 2 to 5 height
+                int lakeW = rand.nextInt(4) + 3; // 3 to 6 width
+                int lakeH = rand.nextInt(3) + 3; // 3 to 5 height
                 int lakeX = rand.nextInt(MAP_COLS - lakeW - 1) + 1;
                 int lakeY = rand.nextInt(MAP_ROWS - lakeH - 1) + 1;
                 
