@@ -275,11 +275,15 @@ public class DungeonScreen implements Screen {
             }
         }
         
-        Random rand = new Random(current.getId() * 1000L);
-        // Tentamos posicionar o lago até 10 vezes para não sobrepor portas ou baús
-            for (int attempt = 0; attempt < 10; attempt++) {
-                int lakeW = rand.nextInt(4) + 3; // 3 to 6 width
-                int lakeH = rand.nextInt(3) + 2; // 2 to 4 height
+        Random rand = new Random();
+        int numLakes = rand.nextInt(3) + 1; // 1 to 3 lakes
+        int lakesPlaced = 0;
+        
+        // Tentamos posicionar os lagos, com mais tentativas para não sobrepor portas ou baús
+        for (int l = 0; l < numLakes; l++) {
+            for (int attempt = 0; attempt < 50; attempt++) {
+                int lakeW = rand.nextInt(5) + 2; // 2 to 6 width
+                int lakeH = rand.nextInt(4) + 2; // 2 to 5 height
                 int lakeX = rand.nextInt(MAP_COLS - lakeW - 1) + 1;
                 int lakeY = rand.nextInt(MAP_ROWS - lakeH - 1) + 1;
                 
@@ -312,9 +316,31 @@ public class DungeonScreen implements Screen {
                             waterMap[c][r] = true;
                         }
                     }
+                    lakesPlaced++;
                     break; // Posicionado com sucesso
                 }
             }
+        }
+        
+        // Garante pelo menos 1 lago se as tentativas falharem
+        if (lakesPlaced == 0) {
+            outer:
+            for (int c = 2; c < MAP_COLS - 2; c++) {
+                for (int r = 2; r < MAP_ROWS - 2; r++) {
+                    if (!waterMap[c][r] && (c != MAP_COLS/2 || r != MAP_ROWS/2) && (c != chestCol || r != chestRow)) {
+                        boolean doorNear = false;
+                        for (DoorPoint d : currentDoors) {
+                            if (Math.abs(d.col - c) <= 1 && Math.abs(d.row - r) <= 1) doorNear = true;
+                        }
+                        if (!doorNear) {
+                            waterMap[c][r] = true;
+                            waterMap[c+1][r] = true;
+                            break outer;
+                        }
+                    }
+                }
+            }
+        }
     }
 
     @Override
