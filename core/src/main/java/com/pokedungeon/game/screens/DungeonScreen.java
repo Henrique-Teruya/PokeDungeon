@@ -216,31 +216,24 @@ public class DungeonScreen implements Screen {
             {0, MAP_ROWS / 2}             
         };
         
-        boolean[] usedPositions = new boolean[4];
-        
-        // Verifica se temos uma sala anterior no histórico
-        Room prevRoom = null;
-        if (dungeonManager.canGoBack()) {
-            prevRoom = dungeonManager.getRoomHistory().peek();
-        }
-        
-        // Se viemos de uma sala, a porta de "voltar" fica obrigatoriamente na direção por onde entramos
-        if (prevRoom != null && lastEntryDirection != -1) {
-            currentDoors.add(new DoorPoint(positions[lastEntryDirection][0], positions[lastEntryDirection][1], prevRoom));
-            usedPositions[lastEntryDirection] = true;
-        }
-        
-        // Distribui os outros caminhos nas portas que sobraram
+        // Distribui as portas baseando-se na posição relativa do vizinho em relação à sala atual
         for (Room neighbor : neighbors) {
-            if (neighbor.equals(prevRoom)) continue; // já colocamos a porta de voltar
+            int dx = neighbor.getMapX() - current.getMapX();
+            int dy = neighbor.getMapY() - current.getMapY();
             
-            // Procura a primeira parede livre (Preferência: Topo > Direita > Baixo > Esq)
-            for (int i = 0; i < 4; i++) {
-                if (!usedPositions[i]) {
-                    currentDoors.add(new DoorPoint(positions[i][0], positions[i][1], neighbor));
-                    usedPositions[i] = true;
-                    break;
-                }
+            int direction = -1;
+            if (dy > 0) {
+                direction = 0; // Topo (Vizinho acima)
+            } else if (dx > 0) {
+                direction = 1; // Direita (Vizinho à direita)
+            } else if (dy < 0) {
+                direction = 2; // Baixo (Vizinho abaixo)
+            } else if (dx < 0) {
+                direction = 3; // Esquerda (Vizinho à esquerda)
+            }
+            
+            if (direction != -1) {
+                currentDoors.add(new DoorPoint(positions[direction][0], positions[direction][1], neighbor));
             }
         }
         
@@ -881,6 +874,7 @@ public class DungeonScreen implements Screen {
     }
 
     private void enterRoom(Room target, int directionUsed) {
+        Room oldRoom = dungeonManager.getCurrentRoom();
         Room prevRoom = dungeonManager.canGoBack() ? dungeonManager.getRoomHistory().peek() : null;
         
         // Se a porta leva para a sala anterior, faz o pop na Stack (Backtrack)
@@ -891,11 +885,20 @@ public class DungeonScreen implements Screen {
             dungeonManager.moveTo(target);
         }
         
-        // Calcula onde a porta de retorno deve aparecer na nova sala
-        if (directionUsed == 0) lastEntryDirection = 2;      // Saiu por Cima -> Entrou por Baixo na próxima
-        else if (directionUsed == 1) lastEntryDirection = 3; // Saiu Direita -> Entrou Esquerda
-        else if (directionUsed == 2) lastEntryDirection = 0; // Saiu Baixo -> Entrou Cima
-        else if (directionUsed == 3) lastEntryDirection = 1; // Saiu Esquerda -> Entrou Direita
+        // Calcula a direção geométrica da porta de entrada na nova sala baseada no posicionamento relativo
+        int dx = oldRoom.getMapX() - target.getMapX();
+        int dy = oldRoom.getMapY() - target.getMapY();
+        if (dy < 0) {
+            lastEntryDirection = 2; // oldRoom está abaixo de target -> entrou pelo Baixo
+        } else if (dx > 0) {
+            lastEntryDirection = 1; // oldRoom está à direita de target -> entrou pela Direita
+        } else if (dy > 0) {
+            lastEntryDirection = 0; // oldRoom está acima de target -> entrou pelo Topo
+        } else if (dx < 0) {
+            lastEntryDirection = 3; // oldRoom está à esquerda de target -> entrou pela Esquerda
+        } else {
+            lastEntryDirection = -1;
+        }
         
         buildRoomMap(); 
         
