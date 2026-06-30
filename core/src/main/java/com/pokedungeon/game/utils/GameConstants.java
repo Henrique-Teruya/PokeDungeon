@@ -2,35 +2,40 @@ package com.pokedungeon.game.utils;
 
 /**
  * Constantes globais do jogo PokeDungeon.
- * Centraliza valores fixos para facilitar manutenção.
  */
 public final class GameConstants {
 
-    private GameConstants() {
-        // Classe utilitária, não deve ser instanciada
-    }
+    private GameConstants() {}
 
-    // Dimensões da janela (Desktop)
+    // Dimensões
     public static final int SCREEN_WIDTH = 1280;
     public static final int SCREEN_HEIGHT = 720;
-
-    // Resolução virtual (Pixel Art Upscale 3x)
     public static final int VIRTUAL_WIDTH = 426;
     public static final int VIRTUAL_HEIGHT = 240;
-
-    // Tamanho do tile no mapa da dungeon
     public static final int TILE_SIZE = 32;
 
-    // Limites do jogador
+    // Limites
     public static final int MAX_TEAM_SIZE = 3;
-    public static final int MAX_INVENTORY_SIZE = 10;
+    public static final int MAX_INVENTORY_SIZE = 20;
 
-    // Valores padrão de batalha
+    // Batalha
     public static final int DEFAULT_POTION_HEAL = 20;
+    public static final int BATTLES_TO_CENTER = 3;
 
-    // Velocidade de movimento (pixels por segundo)
+    // Captura
+    public static final int STARTING_POKEBALLS = 10;
+    public static final int POKEBALLS_PER_CENTER = 5;
+    public static final float BASE_CAPTURE_RATE = 0.4f;
+
+    // Progressão
+    public static final int STARTING_FLOOR = 1;
+    public static final int STARTING_LEVEL = 5;
+    public static final float LEVEL_HP_SCALE = 1.15f;
+    public static final float LEVEL_DMG_SCALE = 1.12f;
+
+    // Velocidade
     public static final float PLAYER_SPEED = 100f;
 
-    // Título do jogo
+    // Título
     public static final String GAME_TITLE = "PokeDungeon";
 }

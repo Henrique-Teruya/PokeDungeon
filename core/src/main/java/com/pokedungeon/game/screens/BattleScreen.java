@@ -2,7 +2,6 @@ package com.pokedungeon.game.screens;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Stack;
 
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
@@ -13,48 +12,30 @@ import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.utils.ScreenUtils;
 import com.badlogic.gdx.utils.viewport.Viewport;
+import com.pokedungeon.game.GameSession;
 import com.pokedungeon.game.Main;
 import com.pokedungeon.game.battle.BattleManager;
 import com.pokedungeon.game.battle.TurnAction;
-import com.pokedungeon.game.inventory.Inventory;
-import com.pokedungeon.game.model.Item;
-import com.pokedungeon.game.model.Player;
 import com.pokedungeon.game.model.Pokemon;
 
-/**
- * Tela de batalha por turnos com sprites e UI estilo Pokémon GBA.
- *
- * Estruturas de dados utilizadas:
- * - Queue (BattleManager.turnQueue): fila de ações FIFO
- * - Stack (BattleLog.actionHistory): histórico de ações LIFO
- * - HashMap (Pokemon.attacks + spriteMap): ataques e mapeamento de sprites
- * - ArrayList (Inventory.items): itens para usar
- */
 public class BattleScreen implements Screen {
 
     private Main game;
     private DungeonScreen dungeonScreen;
     private BattleManager battleManager;
-    private Player player;
-    private Inventory inventory;
+    private GameSession session;
 
-    // Sprites carregados
     private Texture playerBackSprite;
     private Texture enemyFrontSprite;
     private Texture dialogBox;
 
-    // HashMap para mapear nome do pokémon ao caminho do sprite
     private HashMap<String, String> frontSpriteMap;
     private HashMap<String, String> backSpriteMap;
-
-    // Sprites de todos os pokémons do time (para troca)
     private HashMap<String, Texture> teamBackSprites;
 
-    // Ataques do pokémon do jogador como lista para indexar
     private ArrayList<String> attackNames;
 
-    // Estado da UI
-    private enum UIState { CHOOSE_ACTION, CHOOSE_ITEM, CHOOSE_SWITCH, PROCESSING, BATTLE_OVER }
+    private enum UIState { CHOOSE_ACTION, CHOOSE_SWITCH, PROCESSING, BATTLE_OVER }
     private UIState uiState;
 
     private int selectedIndex = 0;
@@ -62,31 +43,33 @@ public class BattleScreen implements Screen {
     private static final float INPUT_DELAY = 0.2f;
 
     public BattleScreen(Main game, DungeonScreen dungeonScreen,
-                        Player player, Pokemon playerPokemon, Pokemon enemyPokemon,
-                        Inventory inventory) {
+                        GameSession session, Pokemon playerPokemon, Pokemon enemyPokemon) {
         this.game = game;
         this.dungeonScreen = dungeonScreen;
-        this.player = player;
-        this.inventory = inventory;
+        this.session = session;
         this.battleManager = new BattleManager(playerPokemon, enemyPokemon);
         this.attackNames = new ArrayList<>(playerPokemon.getAttacks().keySet());
         this.uiState = UIState.CHOOSE_ACTION;
 
-        // Mapeamento de sprites (HashMap - estrutura de dados)
         frontSpriteMap = new HashMap<>();
         frontSpriteMap.put("Charmander", "sprites/charmander.PNG");
         frontSpriteMap.put("Squirtle", "sprites/squirtle.PNG");
         frontSpriteMap.put("Rattata", "sprites/rattata.PNG");
         frontSpriteMap.put("Zubat", "sprites/zubat.PNG");
         frontSpriteMap.put("Onix", "sprites/onyx.PNG");
+        frontSpriteMap.put("Pidgey", "sprites/rattata.PNG");
+        frontSpriteMap.put("Pidgeotto", "sprites/rattata.PNG");
+        frontSpriteMap.put("Caterpie", "sprites/rattata.PNG");
+        frontSpriteMap.put("Metapod", "sprites/rattata.PNG");
+        frontSpriteMap.put("Geodude", "sprites/onyx.PNG");
+        frontSpriteMap.put("Ekans", "sprites/zubat.PNG");
 
         backSpriteMap = new HashMap<>();
         backSpriteMap.put("Charmander", "sprites/charmandercostas.PNG");
         backSpriteMap.put("Squirtle", "sprites/squirtledecostas.PNG");
 
-        // Carrega sprites de todos os pokémons do time (para troca em batalha)
         teamBackSprites = new HashMap<>();
-        for (Pokemon p : player.getTeam()) {
+        for (Pokemon p : session.getPlayer().getTeam()) {
             String path = backSpriteMap.get(p.getName());
             if (path != null) {
                 Texture tex = new Texture(Gdx.files.internal(path));
@@ -95,7 +78,6 @@ public class BattleScreen implements Screen {
             }
         }
 
-        // Sprite atual do jogador
         playerBackSprite = teamBackSprites.get(playerPokemon.getName());
 
         String frontPath = frontSpriteMap.get(enemyPokemon.getName());
@@ -104,7 +86,6 @@ public class BattleScreen implements Screen {
             enemyFrontSprite.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
         }
 
-        // Caixa de diálogo
         dialogBox = new Texture(Gdx.files.internal("ui/barratexto.PNG"));
         dialogBox.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
     }
@@ -117,7 +98,6 @@ public class BattleScreen implements Screen {
         inputCooldown -= delta;
         handleInput();
 
-        // Fundo verde claro estilo Pokémon (campo de batalha)
         ScreenUtils.clear(0.58f, 0.76f, 0.48f, 1f);
 
         SpriteBatch batch = game.getBatch();
@@ -127,25 +107,21 @@ public class BattleScreen implements Screen {
         viewport.apply();
         batch.setProjectionMatrix(viewport.getCamera().combined);
 
-        float sw = viewport.getWorldWidth();   // 426
-        float sh = viewport.getWorldHeight();  // 240
+        float sw = viewport.getWorldWidth();
+        float sh = viewport.getWorldHeight();
 
         Pokemon playerPkm = battleManager.getPlayerPokemon();
         Pokemon enemyPkm = battleManager.getEnemyPokemon();
 
-        // Altura da caixa de diálogo (proporção da barratexto original ~2:1)
         float dialogH = 80;
         float dialogY = 0;
-
-        // Área de batalha = acima da caixa de diálogo
         float battleAreaH = sh - dialogH;
 
         batch.begin();
 
-        // ========== CENÁRIO DA BATALHA ==========
         batch.setColor(Color.WHITE);
 
-        // --- Sprite do inimigo (topo-direita, 64x64 escalado para 56x56 na virtual) ---
+        // Enemy sprite
         float enemySpriteSize = 56;
         float enemyX = sw - enemySpriteSize - 50;
         float enemyY = dialogH + battleAreaH * 0.5f;
@@ -153,7 +129,7 @@ public class BattleScreen implements Screen {
             batch.draw(enemyFrontSprite, enemyX, enemyY, enemySpriteSize, enemySpriteSize);
         }
 
-        // --- Sprite do jogador (embaixo-esquerda, 32x32 escalado para 52x52) ---
+        // Player sprite
         float playerSpriteSize = 52;
         float playerX = 40;
         float playerY = dialogH + 10;
@@ -161,56 +137,46 @@ public class BattleScreen implements Screen {
             batch.draw(playerBackSprite, playerX, playerY, playerSpriteSize, playerSpriteSize);
         }
 
-        // ========== INFO BOX DO INIMIGO (topo-esquerda) ==========
+        // Enemy info box
         float infoBoxW = 140;
         float infoBoxH = 36;
         float enemyInfoX = 10;
         float enemyInfoY = sh - infoBoxH - 8;
 
-        // Fundo da info box
         batch.setColor(0.95f, 0.93f, 0.85f, 1f);
         batch.draw(game.getPixelWhite(), enemyInfoX, enemyInfoY, infoBoxW, infoBoxH);
-        // Borda inferior
         batch.setColor(0.3f, 0.3f, 0.3f, 1f);
         batch.draw(game.getPixelWhite(), enemyInfoX, enemyInfoY, infoBoxW, 2);
         batch.setColor(Color.WHITE);
 
-        // Nome e HP do inimigo
         font.setColor(Color.BLACK);
         font.draw(batch, enemyPkm.getName(), enemyInfoX + 6, enemyInfoY + infoBoxH - 6);
 
-        // Barra de HP do inimigo
         float barW = 80;
         float barH = 5;
         float eBarX = enemyInfoX + 6;
         float eBarY = enemyInfoY + 8;
         float enemyHpRatio = (float) enemyPkm.getHp() / enemyPkm.getMaxHp();
 
-        // Label "HP"
         font.setColor(Color.ORANGE);
         font.draw(batch, "HP", eBarX, eBarY + barH + 2);
 
-        // Fundo da barra
         batch.setColor(Color.DARK_GRAY);
         batch.draw(game.getPixelWhite(), eBarX + 20, eBarY, barW, barH);
-        // Barra preenchida
         batch.setColor(getHpColor(enemyHpRatio));
         batch.draw(game.getPixelWhite(), eBarX + 20, eBarY, barW * enemyHpRatio, barH);
         batch.setColor(Color.WHITE);
 
-        // ========== INFO BOX DO JOGADOR (embaixo-direita) ==========
+        // Player info box
         float playerInfoX = sw - infoBoxW - 10;
         float playerInfoY = dialogH + battleAreaH * 0.12f;
 
-        // Fundo da info box
         batch.setColor(0.95f, 0.93f, 0.85f, 1f);
         batch.draw(game.getPixelWhite(), playerInfoX, playerInfoY, infoBoxW, infoBoxH + 8);
-        // Borda superior
         batch.setColor(0.3f, 0.3f, 0.3f, 1f);
         batch.draw(game.getPixelWhite(), playerInfoX, playerInfoY + infoBoxH + 6, infoBoxW, 2);
         batch.setColor(Color.WHITE);
 
-        // Nome e HP do jogador
         font.setColor(Color.BLACK);
         font.draw(batch, playerPkm.getName(), playerInfoX + 6, playerInfoY + infoBoxH + 2);
 
@@ -227,23 +193,18 @@ public class BattleScreen implements Screen {
         batch.draw(game.getPixelWhite(), pBarX + 20, pBarY, barW * playerHpRatio, barH);
         batch.setColor(Color.WHITE);
 
-        // HP numérico do jogador
         font.setColor(Color.BLACK);
         font.draw(batch, playerPkm.getHp() + "/" + playerPkm.getMaxHp(), pBarX + 20, pBarY - 2);
 
-        // ========== CAIXA DE DIÁLOGO (parte inferior) ==========
+        // Dialog box
         batch.draw(dialogBox, 0, dialogY, sw, dialogH);
 
-        // Margem interna do texto na caixa de diálogo
         float textX = 16;
         float textY = dialogH - 16;
 
         switch (uiState) {
             case CHOOSE_ACTION:
                 drawAttackMenu(batch, font, textX, textY, sw);
-                break;
-            case CHOOSE_ITEM:
-                drawItemMenu(batch, font, textX, textY);
                 break;
             case CHOOSE_SWITCH:
                 drawSwitchMenu(batch, font, textX, textY);
@@ -252,7 +213,7 @@ public class BattleScreen implements Screen {
                 if (!battleManager.isBattleOver()) {
                     Pokemon current = battleManager.getPlayerPokemon();
                     if (current.isFainted()) {
-                        Pokemon next = player.getActivePokemon();
+                        Pokemon next = session.getPlayer().getActivePokemon();
                         if (next != null) {
                             battleManager.setPlayerPokemon(next);
                             battleManager.getBattleLog().log(next.getName() + " foi enviado!");
@@ -270,9 +231,9 @@ public class BattleScreen implements Screen {
             case BATTLE_OVER:
                 drawBattleOver(batch, font, textX, textY);
                 break;
+
         }
 
-        // ========== LOG DE BATALHA (no cenário, acima da caixa) ==========
         drawBattleLog(batch, font, 10, dialogH + battleAreaH * 0.42f);
 
         font.setColor(Color.WHITE);
@@ -282,7 +243,6 @@ public class BattleScreen implements Screen {
     private void drawAttackMenu(SpriteBatch batch, BitmapFont font, float startX, float startY, float sw) {
         Pokemon p = battleManager.getPlayerPokemon();
 
-        // Layout em 2 colunas estilo Pokémon clássico
         float col1X = startX;
         float col2X = sw / 2 + 10;
         float rowH = 18;
@@ -301,22 +261,7 @@ public class BattleScreen implements Screen {
             }
         }
 
-        // Opção de Item
-        int itemIndex = attackNames.size();
-        int itemRow = itemIndex / 2;
-        float itemX = (itemIndex % 2 == 0) ? col1X : col2X;
-        float itemY = startY - itemRow * rowH;
-
-        if (selectedIndex == itemIndex) {
-            font.setColor(Color.BLACK);
-            font.draw(batch, "> MOCHILA", itemX, itemY);
-        } else {
-            font.setColor(Color.DARK_GRAY);
-            font.draw(batch, "  MOCHILA", itemX, itemY);
-        }
-
-        // Opção de Trocar
-        int trocarIndex = attackNames.size() + 1;
+        int trocarIndex = attackNames.size();
         int trocarRow = trocarIndex / 2;
         float trocarX = (trocarIndex % 2 == 0) ? col1X : col2X;
         float trocarY = startY - trocarRow * rowH;
@@ -330,36 +275,13 @@ public class BattleScreen implements Screen {
         }
     }
 
-    private void drawItemMenu(SpriteBatch batch, BitmapFont font, float startX, float startY) {
-        if (inventory.isEmpty()) {
-            font.setColor(Color.DARK_GRAY);
-            font.draw(batch, "Mochila vazia!", startX, startY);
-            font.setColor(Color.BLACK);
-            font.draw(batch, "[ESC] Voltar", startX, startY - 18);
-        } else {
-            for (int i = 0; i < inventory.getSize(); i++) {
-                Item item = inventory.getItem(i);
-                float y = startY - (i * 14);
-                if (i == selectedIndex) {
-                    font.setColor(Color.BLACK);
-                    font.draw(batch, "> " + item.getName(), startX, y);
-                } else {
-                    font.setColor(Color.DARK_GRAY);
-                    font.draw(batch, "  " + item.getName(), startX, y);
-                }
-            }
-            font.setColor(Color.GRAY);
-            font.draw(batch, "[ESC] Voltar", startX + 160, startY);
-        }
-    }
-
     private void drawSwitchMenu(SpriteBatch batch, BitmapFont font, float startX, float startY) {
         font.setColor(Color.BLACK);
         font.draw(batch, "Para qual Pokemon?", startX, startY);
         float y = startY - 16;
 
-        for (int i = 0; i < player.getTeam().size(); i++) {
-            Pokemon p = player.getTeam().get(i);
+        for (int i = 0; i < session.getPlayer().getTeam().size(); i++) {
+            Pokemon p = session.getPlayer().getTeam().get(i);
             boolean isCurrent = (p == battleManager.getPlayerPokemon());
 
             if (i == selectedIndex) {
@@ -391,14 +313,14 @@ public class BattleScreen implements Screen {
         if (battleManager.isPlayerWinner()) {
             font.setColor(Color.BLACK);
             font.draw(batch, battleManager.getEnemyPokemon().getName() + " foi derrotado!", startX, startY);
+            font.setColor(Color.DARK_GRAY);
+            font.draw(batch, "[ENTER] Continuar", startX, startY - 20);
         } else {
             font.setColor(Color.RED);
-            font.draw(batch, playerBackSprite != null ?
-                battleManager.getPlayerPokemon().getName() + " desmaiou!" :
-                "Derrota!", startX, startY);
+            font.draw(batch, "Derrota!", startX, startY);
+            font.setColor(Color.DARK_GRAY);
+            font.draw(batch, "[ENTER] Game Over", startX, startY - 20);
         }
-        font.setColor(Color.DARK_GRAY);
-        font.draw(batch, "[ENTER] Voltar à Dungeon", startX, startY - 20);
     }
 
     private Color getHpColor(float ratio) {
@@ -408,7 +330,7 @@ public class BattleScreen implements Screen {
     }
 
     private void drawBattleLog(SpriteBatch batch, BitmapFont font, float x, float y) {
-        Stack<String> history = battleManager.getBattleLog().getHistory();
+        var history = battleManager.getBattleLog().getHistory();
         if (history.isEmpty()) return;
 
         int start = Math.max(0, history.size() - 2);
@@ -419,32 +341,23 @@ public class BattleScreen implements Screen {
         }
     }
 
-    // ========== HELPERS ==========
-
     private void updateAttackNames() {
         this.attackNames = new ArrayList<>(battleManager.getPlayerPokemon().getAttacks().keySet());
     }
-
-    // ========== INPUT ==========
 
     private void handleInput() {
         if (inputCooldown > 0) return;
 
         switch (uiState) {
             case CHOOSE_ACTION: handleActionInput(); break;
-            case CHOOSE_ITEM: handleItemInput(); break;
             case CHOOSE_SWITCH: handleSwitchInput(); break;
-            case BATTLE_OVER:
-                if (Gdx.input.isKeyJustPressed(Input.Keys.ENTER)) {
-                    game.setScreen(dungeonScreen);
-                }
-                break;
+            case BATTLE_OVER: handleBattleOverInput(); break;
             default: break;
         }
     }
 
     private void handleActionInput() {
-        int maxIndex = attackNames.size() + 1; // +1 for TROCAR (MOCHILA is already in the +1 range)
+        int maxIndex = attackNames.size();
 
         if (Gdx.input.isKeyPressed(Input.Keys.UP) || Gdx.input.isKeyPressed(Input.Keys.W)) {
             selectedIndex = (selectedIndex - 1 + maxIndex + 1) % (maxIndex + 1);
@@ -453,13 +366,6 @@ public class BattleScreen implements Screen {
         if (Gdx.input.isKeyPressed(Input.Keys.DOWN) || Gdx.input.isKeyPressed(Input.Keys.S)) {
             selectedIndex = (selectedIndex + 1) % (maxIndex + 1);
             inputCooldown = INPUT_DELAY;
-        }
-
-        if (Gdx.input.isKeyJustPressed(Input.Keys.I)) {
-            selectedIndex = 0;
-            uiState = UIState.CHOOSE_ITEM;
-            inputCooldown = INPUT_DELAY;
-            return;
         }
 
         if (Gdx.input.isKeyJustPressed(Input.Keys.ENTER)) {
@@ -472,9 +378,6 @@ public class BattleScreen implements Screen {
                 battleManager.enqueueEnemyAction();
                 battleManager.processTurn();
                 uiState = UIState.PROCESSING;
-            } else if (selectedIndex == attackNames.size()) {
-                selectedIndex = 0;
-                uiState = UIState.CHOOSE_ITEM;
             } else {
                 selectedIndex = 0;
                 uiState = UIState.CHOOSE_SWITCH;
@@ -499,7 +402,7 @@ public class BattleScreen implements Screen {
     }
 
     private void handleSwitchInput() {
-        int maxIndex = player.getTeam().size();
+        int maxIndex = session.getPlayer().getTeam().size();
 
         if (Gdx.input.isKeyJustPressed(Input.Keys.ESCAPE)) {
             selectedIndex = 0;
@@ -525,7 +428,7 @@ public class BattleScreen implements Screen {
         }
 
         if (Gdx.input.isKeyJustPressed(Input.Keys.ENTER)) {
-            Pokemon target = player.getTeam().get(selectedIndex);
+            Pokemon target = session.getPlayer().getTeam().get(selectedIndex);
             Pokemon current = battleManager.getPlayerPokemon();
 
             if (!target.isFainted() && target != current) {
@@ -542,35 +445,15 @@ public class BattleScreen implements Screen {
         }
     }
 
-    private void handleItemInput() {
-        if (Gdx.input.isKeyJustPressed(Input.Keys.ESCAPE)) {
-            selectedIndex = 0;
-            uiState = UIState.CHOOSE_ACTION;
-            inputCooldown = INPUT_DELAY;
-            return;
-        }
-
-        if (inventory.isEmpty()) return;
-
-        if (Gdx.input.isKeyPressed(Input.Keys.UP) || Gdx.input.isKeyPressed(Input.Keys.W)) {
-            selectedIndex = (selectedIndex - 1 + inventory.getSize()) % inventory.getSize();
-            inputCooldown = INPUT_DELAY;
-        }
-        if (Gdx.input.isKeyPressed(Input.Keys.DOWN) || Gdx.input.isKeyPressed(Input.Keys.S)) {
-            selectedIndex = (selectedIndex + 1) % inventory.getSize();
-            inputCooldown = INPUT_DELAY;
-        }
-
+    private void handleBattleOverInput() {
         if (Gdx.input.isKeyJustPressed(Input.Keys.ENTER)) {
-            Item item = inventory.getItem(selectedIndex);
-            if (item != null) {
-                TurnAction useAction = TurnAction.useItem(battleManager.getPlayerPokemon(), item);
-                inventory.removeItem(selectedIndex);
-                battleManager.enqueuePlayerAction(useAction);
-                battleManager.enqueueEnemyAction();
-                battleManager.processTurn();
-                selectedIndex = 0;
-                uiState = UIState.PROCESSING;
+            if (battleManager.isPlayerWinner()) {
+                Pokemon defeated = battleManager.getEnemyPokemon();
+                session.onBattleWon(defeated);
+                dungeonScreen.onBattleWon(defeated);
+            } else {
+                session.setGameOver(true);
+                game.setScreen(dungeonScreen);
             }
             inputCooldown = INPUT_DELAY;
         }

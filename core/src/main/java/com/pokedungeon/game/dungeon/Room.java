@@ -13,26 +13,20 @@ import com.pokedungeon.game.model.Pokemon;
  * - Encapsulamento: atributos privados com getters/setters
  * - Reutilização: usada tanto no Grafo quanto no gerenciador
  */
+public enum RoomEvent { NONE, MYSTERY_CHEST, HEALING_SPRING, RARE_POKEMON }
+
 public class Room {
 
     private int id;
     private String name;
     private String description;
-    private Pokemon enemy;   // pokémon inimigo (pode ser null)
-    private Item item;       // item na sala (pode ser null)
+    private Pokemon enemy;
+    private Item item;
     private boolean visited;
-    
-    // Coordenadas lógicas do minimapa
+    private RoomEvent event;
     private int mapX;
     private int mapY;
 
-    /**
-     * Cria uma nova sala.
-     *
-     * @param id          identificador único
-     * @param name        nome da sala
-     * @param description descrição da sala
-     */
     public Room(int id, String name, String description) {
         this.id = id;
         this.name = name;
@@ -40,103 +34,49 @@ public class Room {
         this.enemy = null;
         this.item = null;
         this.visited = false;
+        this.event = RoomEvent.NONE;
     }
 
-    /**
-     * @return true se a sala tem um inimigo vivo
-     */
     public boolean hasEnemy() {
         return enemy != null && !enemy.isFainted();
     }
 
-    /**
-     * @return true se a sala tem um item para coletar
-     */
     public boolean hasItem() {
         return item != null;
     }
 
-    /**
-     * Coleta o item da sala e retorna.
-     * O item é removido da sala após a coleta.
-     *
-     * @return item coletado, ou null se não houver
-     */
     public Item collectItem() {
         Item collected = this.item;
         this.item = null;
         return collected;
     }
 
-    // --- Getters e Setters ---
-
-    public int getId() {
-        return id;
+    public void triggerEvent() {
+        event = RoomEvent.NONE;
     }
 
-    public String getName() {
-        return name;
-    }
+    public int getId() { return id; }
+    public void setName(String name) { this.name = name; }
+    public String getName() { return name; }
+    public String getDescription() { return description; }
+    public Pokemon getEnemy() { return enemy; }
+    public void setEnemy(Pokemon enemy) { this.enemy = enemy; }
+    public Item getItem() { return item; }
+    public void setItem(Item item) { this.item = item; }
+    public boolean isVisited() { return visited; }
+    public void setVisited(boolean visited) { this.visited = visited; }
+    public int getMapX() { return mapX; }
+    public void setMapX(int mapX) { this.mapX = mapX; }
+    public int getMapY() { return mapY; }
+    public void setMapY(int mapY) { this.mapY = mapY; }
+    public RoomEvent getEvent() { return event; }
+    public void setEvent(RoomEvent event) { this.event = event; }
 
-    public String getDescription() {
-        return description;
-    }
-
-    public Pokemon getEnemy() {
-        return enemy;
-    }
-
-    public void setEnemy(Pokemon enemy) {
-        this.enemy = enemy;
-    }
-
-    public Item getItem() {
-        return item;
-    }
-
-    public void setItem(Item item) {
-        this.item = item;
-    }
-
-    public boolean isVisited() {
-        return visited;
-    }
-
-    public void setVisited(boolean visited) {
-        this.visited = visited;
-    }
-
-    public int getMapX() {
-        return mapX;
-    }
-
-    public void setMapX(int mapX) {
-        this.mapX = mapX;
-    }
-
-    public int getMapY() {
-        return mapY;
-    }
-
-    public void setMapY(int mapY) {
-        this.mapY = mapY;
-    }
-
-    @Override
-    public String toString() {
-        return "[Sala " + id + "] " + name;
-    }
-
-    @Override
-    public boolean equals(Object obj) {
+    @Override public String toString() { return "[Sala " + id + "] " + name; }
+    @Override public boolean equals(Object obj) {
         if (this == obj) return true;
         if (obj == null || getClass() != obj.getClass()) return false;
-        Room room = (Room) obj;
-        return id == room.id;
+        return id == ((Room) obj).id;
     }
-
-    @Override
-    public int hashCode() {
-        return Integer.hashCode(id);
-    }
+    @Override public int hashCode() { return Integer.hashCode(id); }
 }

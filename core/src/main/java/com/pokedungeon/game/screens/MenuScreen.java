@@ -10,6 +10,7 @@ import com.badlogic.gdx.graphics.g2d.GlyphLayout;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.utils.ScreenUtils;
 import com.badlogic.gdx.utils.viewport.Viewport;
+import com.pokedungeon.game.GameSession;
 import com.pokedungeon.game.Main;
 
 public class MenuScreen implements Screen {
@@ -121,7 +122,8 @@ public class MenuScreen implements Screen {
         }
         if (Gdx.input.isKeyJustPressed(Input.Keys.ENTER)) {
             if (selectedOption == 0) {
-                game.setScreen(new DungeonScreen(game));
+                GameSession session = new GameSession();
+                game.setScreen(new StarterChoiceScreen(game, session));
                 dispose();
             } else {
                 Gdx.app.exit();

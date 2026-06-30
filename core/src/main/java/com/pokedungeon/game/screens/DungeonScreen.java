@@ -14,61 +14,56 @@ import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.math.Rectangle;
 import com.badlogic.gdx.utils.ScreenUtils;
 import com.badlogic.gdx.utils.viewport.Viewport;
+import com.pokedungeon.game.GameSession;
 import com.pokedungeon.game.Main;
 import com.pokedungeon.game.dungeon.DungeonGraph;
 import com.pokedungeon.game.dungeon.DungeonManager;
+import com.pokedungeon.game.dungeon.DungeonGenerator;
 import com.pokedungeon.game.dungeon.Room;
-import com.pokedungeon.game.inventory.Inventory;
 import com.pokedungeon.game.model.Item;
-import com.pokedungeon.game.model.Player;
 import com.pokedungeon.game.model.Pokemon;
 import com.pokedungeon.game.utils.GameConstants;
 
 public class DungeonScreen implements Screen {
 
     private Main game;
-    private Player player;
-    private Inventory inventory;
+    private GameSession session;
     private DungeonManager dungeonManager;
 
-    // Texturas visuais
+    // Texturas
     private Texture texFloor, texWall, texDoor, texChest, texWater, texGrass;
     private Texture texWaterN, texWaterS, texWaterE, texWaterW, texWaterNW, texWaterNE, texWaterSW, texWaterSE, texWaterCenter;
-    
-    // Sprites do jogador por direção
+
+    // Sprites do jogador
     private Texture texPlayerDown, texPlayerLeft, texPlayerRight, texPlayerUp;
     private Texture texPlayerDownWalk1, texPlayerDownWalk2;
     private Texture texPlayerLeftWalk1, texPlayerLeftWalk2;
     private Texture texPlayerRightWalk1, texPlayerRightWalk2;
     private Texture texPlayerUpWalk1, texPlayerUpWalk2;
-    private int currentDirection = 0; // 0=Baixo, 1=Esquerda, 2=Direita, 3=Cima
+    private int currentDirection = 0;
     private float stateTime = 0f;
     private boolean isMoving = false;
 
-    // Movimentação e mapa
     private float playerX, playerY;
     private final int TILE = 32;
-    private final int MAP_COLS = 13; // 13 * 32 = 416 px
-    private final int MAP_ROWS = 7;  // 7 * 32 = 224 px
+    private final int MAP_COLS = 13;
+    private final int MAP_ROWS = 7;
 
     private boolean[][] waterMap = new boolean[MAP_COLS][MAP_ROWS];
-
     private String statusMessage = "";
 
-    // Sprites dos pokémons do time para a sidebar
     private HashMap<String, Texture> pokemonSprites;
 
-    // Modo de seleção de time (TAB)
+    // Team selection
     private boolean selectingTeam = false;
     private int teamCursorIndex = 0;
     private int firstSwapIndex = -1;
     private float selectionCooldown = 0f;
 
-    // Menu de pausa (ESC)
+    // Pause
     private boolean paused = false;
     private int pauseCursor = 0;
 
-    // Estrutura auxiliar para mapear portas na sala
     class DoorPoint {
         int col, row;
         Room target;
@@ -79,8 +74,19 @@ public class DungeonScreen implements Screen {
 
     public DungeonScreen(Main game) {
         this.game = game;
-        
-        // Carrega assets
+        loadTextures();
+        session = new GameSession();
+        generateFloor();
+    }
+
+    public DungeonScreen(Main game, GameSession session) {
+        this.game = game;
+        this.session = session;
+        loadTextures();
+        generateFloor();
+    }
+
+    private void loadTextures() {
         texFloor = new Texture(Gdx.files.internal("tiles/floor.png"));
         texWall = new Texture(Gdx.files.internal("tiles/wall.png"));
         texDoor = new Texture(Gdx.files.internal("tiles/door.png"));
@@ -88,7 +94,6 @@ public class DungeonScreen implements Screen {
         texWater = new Texture(Gdx.files.internal("tiles/water.png"));
         texGrass = new Texture(Gdx.files.internal("tiles/grass.png"));
 
-        // Texturas de lago (Autotiling)
         texWaterCenter = new Texture(Gdx.files.internal("tiles/water_center.png"));
         texWaterN = new Texture(Gdx.files.internal("tiles/water_n.png"));
         texWaterS = new Texture(Gdx.files.internal("tiles/water_s.png"));
@@ -99,7 +104,6 @@ public class DungeonScreen implements Screen {
         texWaterSW = new Texture(Gdx.files.internal("tiles/water_sw.png"));
         texWaterSE = new Texture(Gdx.files.internal("tiles/water_se.png"));
 
-        // Filtro Nearest para todos os tiles
         Texture[] allTiles = {
             texFloor, texWall, texDoor, texChest, texWater, texGrass,
             texWaterCenter, texWaterN, texWaterS, texWaterE, texWaterW,
@@ -109,81 +113,11 @@ public class DungeonScreen implements Screen {
             t.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
         }
 
-        initializeGame();
-    }
-
-    private void initializeGame() {
-        player = new Player("Red");
-
-        Pokemon charmander = new Pokemon("Charmander", "Fogo", 80);
-        charmander.addAttack("Lança-Chamas", 25);
-        charmander.addAttack("Arranhão", 15);
-
-        Pokemon squirtle = new Pokemon("Squirtle", "Água", 90);
-        squirtle.addAttack("Jato d'Água", 22);
-        squirtle.addAttack("Investida", 14);
-
-        player.addPokemon(charmander);
-        player.addPokemon(squirtle);
-
-        pokemonSprites = new HashMap<>();
-        for (Pokemon p : player.getTeam()) {
-            String path = "sprites/" + p.getName().toLowerCase() + ".PNG";
-            if (Gdx.files.internal(path).exists()) {
-                Texture tex = new Texture(Gdx.files.internal(path));
-                tex.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
-                pokemonSprites.put(p.getName(), tex);
-            }
-        }
-
-        inventory = new Inventory();
-        inventory.addItem(new Item("Poção", GameConstants.DEFAULT_POTION_HEAL));
-
-        DungeonGraph graph = new DungeonGraph();
-
-        Room entrance = new Room(0, "Entrada", "A entrada escura da dungeon.");
-        entrance.setMapX(0); entrance.setMapY(0);
-        
-        Room corridor = new Room(1, "Corredor", "Um corredor longo e úmido.");
-        corridor.setMapX(0); corridor.setMapY(1);
-        
-        Room treasure = new Room(2, "Sala do Tesouro", "Uma sala com um baú!");
-        treasure.setMapX(1); treasure.setMapY(0);
-        
-        Room arena = new Room(3, "Arena", "Uma arena de batalha antiga.");
-        arena.setMapX(0); arena.setMapY(2);
-        
-        Room bossRoom = new Room(4, "Sala do Chefe", "O covil do chefe!");
-        bossRoom.setMapX(0); bossRoom.setMapY(3);
-
-        treasure.setItem(new Item("Poção Máxima", 60));
-
-        Pokemon rattata = new Pokemon("Rattata", "Normal", 40);
-        rattata.addAttack("Investida", 12);
-        corridor.setEnemy(rattata);
-
-        Pokemon zubat = new Pokemon("Zubat", "Voador", 50);
-        zubat.addAttack("Mordida", 15);
-        arena.setEnemy(zubat);
-
-        Pokemon onix = new Pokemon("Onix", "Pedra", 100);
-        onix.addAttack("Pedrada", 28);
-        bossRoom.setEnemy(onix);
-
-        graph.connect(entrance, corridor);
-        graph.connect(entrance, treasure);
-        graph.connect(corridor, arena);
-        graph.connect(arena, bossRoom);
-
-        dungeonManager = new DungeonManager(graph, entrance);
-        statusMessage = "Explore a dungeon!";
-        
-        // Carrega sprites individuais do jogador por direção
         texPlayerDown = new Texture(Gdx.files.internal("sprites/player/player_down.png"));
         texPlayerLeft = new Texture(Gdx.files.internal("sprites/player/player_left.png"));
         texPlayerRight = new Texture(Gdx.files.internal("sprites/player/player_right.png"));
         texPlayerUp = new Texture(Gdx.files.internal("sprites/player/player_up.png"));
-        
+
         texPlayerDownWalk1 = new Texture(Gdx.files.internal("sprites/player/player_down_walk1.png"));
         texPlayerDownWalk2 = new Texture(Gdx.files.internal("sprites/player/player_down_walk2.png"));
         texPlayerLeftWalk1 = new Texture(Gdx.files.internal("sprites/player/player_left_walk1.png"));
@@ -192,100 +126,153 @@ public class DungeonScreen implements Screen {
         texPlayerRightWalk2 = new Texture(Gdx.files.internal("sprites/player/player_right_walk2.png"));
         texPlayerUpWalk1 = new Texture(Gdx.files.internal("sprites/player/player_up_walk1.png"));
         texPlayerUpWalk2 = new Texture(Gdx.files.internal("sprites/player/player_up_walk2.png"));
-        
+
+        pokemonSprites = new HashMap<>();
+        for (Pokemon p : session.getPlayer().getTeam()) {
+            String path = "sprites/" + p.getName().toLowerCase() + ".PNG";
+            if (Gdx.files.internal(path).exists()) {
+                Texture tex = new Texture(Gdx.files.internal(path));
+                tex.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
+                pokemonSprites.put(p.getName(), tex);
+            }
+        }
+    }
+
+    private void generateFloor() {
+        DungeonGenerator generator = new DungeonGenerator(session.getRandom(), session.getCurrentFloor());
+        DungeonGraph graph = generator.generate();
+
+        ArrayList<Room> rooms = graph.getAllRooms();
+        boolean hasEntrance = false;
+        boolean isBossFloor = session.isBossFloor();
+
+        for (Room room : rooms) {
+            if (!hasEntrance) {
+                hasEntrance = true;
+                dungeonManager = new DungeonManager(graph, room);
+                if (isBossFloor) {
+                    statusMessage = "Andar " + session.getCurrentFloor() + " - BOSS!";
+                } else {
+                    statusMessage = "Andar " + session.getCurrentFloor() + " - Explore!";
+                }
+            } else {
+                if (session.getRandom().nextFloat() < 0.5f) {
+                    room.setEnemy(session.generateEnemy());
+                } else if (session.getRandom().nextFloat() < 0.25f) {
+                    room.setItem(new Item("Poção", GameConstants.DEFAULT_POTION_HEAL));
+                } else if (session.getRandom().nextFloat() < 0.15f) {
+                    // Random events
+                    float eventRoll = session.getRandom().nextFloat();
+                    if (eventRoll < 0.4f) {
+                        room.setEvent(RoomEvent.MYSTERY_CHEST);
+                        room.setItem(new Item("Super Poção", 40));
+                        room.setName("Baú Misterioso");
+                    } else if (eventRoll < 0.7f) {
+                        room.setEvent(RoomEvent.HEALING_SPRING);
+                        room.setName("Fonte de Cura");
+                    } else {
+                        room.setEvent(RoomEvent.RARE_POKEMON);
+                        room.setEnemy(session.generateEnemy());
+                        room.setName("Sala Secreta");
+                    }
+                }
+            }
+        }
+
+        // Add boss to last room on boss floors
+        if (isBossFloor && !rooms.isEmpty()) {
+            Room lastRoom = rooms.get(rooms.size() - 1);
+            lastRoom.setEnemy(session.generateBoss());
+            lastRoom.setName("Sala do Boss");
+        }
+
+        if (!hasEntrance) {
+            Room entrance = new Room(0, "Entrada", "A entrada escura da dungeon.");
+            entrance.setMapX(0); entrance.setMapY(0);
+            graph.addRoom(entrance);
+            dungeonManager = new DungeonManager(graph, entrance);
+        }
+
+        lastEntryDirection = -1;
         buildRoomMap();
     }
 
-    // Direção de onde o jogador acabou de entrar na sala (-1 = primeira sala)
-    // 0: Topo, 1: Direita, 2: Baixo, 3: Esquerda
     private int lastEntryDirection = -1;
 
-    // Monta a sala baseada no Grafo (onde estão as conexões)
     private void buildRoomMap() {
         currentDoors.clear();
         chestCol = -1; chestRow = -1;
-        
+
         Room current = dungeonManager.getCurrentRoom();
         ArrayList<Room> neighbors = dungeonManager.getAvailableRooms();
-        
-        // Posições possíveis das portas: 0=Topo, 1=Direita, 2=Baixo, 3=Esquerda
+
         int[][] positions = {
-            {MAP_COLS / 2, MAP_ROWS - 1}, 
-            {MAP_COLS - 1, MAP_ROWS / 2}, 
-            {MAP_COLS / 2, 0},            
-            {0, MAP_ROWS / 2}             
+            {MAP_COLS / 2, MAP_ROWS - 1},
+            {MAP_COLS - 1, MAP_ROWS / 2},
+            {MAP_COLS / 2, 0},
+            {0, MAP_ROWS / 2}
         };
-        
-        // Distribui as portas baseando-se na posição relativa do vizinho em relação à sala atual
+
         for (Room neighbor : neighbors) {
             int dx = neighbor.getMapX() - current.getMapX();
             int dy = neighbor.getMapY() - current.getMapY();
-            
+
             int direction = -1;
-            if (dy > 0) {
-                direction = 0; // Topo (Vizinho acima)
-            } else if (dx > 0) {
-                direction = 1; // Direita (Vizinho à direita)
-            } else if (dy < 0) {
-                direction = 2; // Baixo (Vizinho abaixo)
-            } else if (dx < 0) {
-                direction = 3; // Esquerda (Vizinho à esquerda)
-            }
-            
+            if (dy > 0) direction = 0;
+            else if (dx > 0) direction = 1;
+            else if (dy < 0) direction = 2;
+            else if (dx < 0) direction = 3;
+
             if (direction != -1) {
                 currentDoors.add(new DoorPoint(positions[direction][0], positions[direction][1], neighbor));
             }
         }
-        
+
         if (current.hasItem()) {
             chestCol = MAP_COLS / 2;
             chestRow = MAP_ROWS / 2;
         }
-        
-        // Spawn do jogador de acordo com a porta que ele acabou de entrar
-        if (lastEntryDirection == 0) { // Entrou pelo Topo
+
+        if (lastEntryDirection == 0) {
             playerX = positions[0][0] * TILE;
             playerY = (positions[0][1] - 1) * TILE;
-        } else if (lastEntryDirection == 1) { // Entrou pela Direita
+        } else if (lastEntryDirection == 1) {
             playerX = (positions[1][0] - 1) * TILE;
             playerY = positions[1][1] * TILE;
-        } else if (lastEntryDirection == 2) { // Entrou por Baixo
+        } else if (lastEntryDirection == 2) {
             playerX = positions[2][0] * TILE;
             playerY = (positions[2][1] + 1) * TILE;
-        } else if (lastEntryDirection == 3) { // Entrou pela Esquerda
+        } else if (lastEntryDirection == 3) {
             playerX = (positions[3][0] + 1) * TILE;
             playerY = positions[3][1] * TILE;
         } else {
-            // Primeira sala: nasce no meio
             playerX = (MAP_COLS / 2) * TILE;
-            playerY = (MAP_ROWS / 2) * TILE - 20; 
+            playerY = (MAP_ROWS / 2) * TILE - 20;
         }
 
-        // Generate water map for this room
-        for(int c=0; c<MAP_COLS; c++) {
-            for(int r=0; r<MAP_ROWS; r++) {
+        for (int c = 0; c < MAP_COLS; c++) {
+            for (int r = 0; r < MAP_ROWS; r++) {
                 waterMap[c][r] = false;
             }
         }
-        
+
         Random rand = new Random(current.getId() * 1000L);
-        int numLakes = rand.nextInt(3) + 1; // 1 to 3 lakes
+        int numLakes = rand.nextInt(3) + 1;
         int lakesPlaced = 0;
-        
-        // Tentamos posicionar os lagos, com mais tentativas para não sobrepor portas ou baús
+
         for (int l = 0; l < numLakes; l++) {
             for (int attempt = 0; attempt < 50; attempt++) {
-                int lakeW = rand.nextInt(4) + 3; // 3 to 6 width
-                int lakeH = rand.nextInt(3) + 3; // 3 to 5 height
+                int lakeW = rand.nextInt(4) + 3;
+                int lakeH = rand.nextInt(3) + 3;
                 int lakeX = rand.nextInt(MAP_COLS - lakeW - 1) + 1;
                 int lakeY = rand.nextInt(MAP_ROWS - lakeH - 1) + 1;
-                
+
                 boolean overlap = false;
                 int checkX1 = lakeX - 1;
                 int checkX2 = lakeX + lakeW;
                 int checkY1 = lakeY - 1;
                 int checkY2 = lakeY + lakeH;
-                
+
                 for (DoorPoint d : currentDoors) {
                     if (d.col >= checkX1 && d.col <= checkX2 && d.row >= checkY1 && d.row <= checkY2) {
                         overlap = true;
@@ -295,39 +282,37 @@ public class DungeonScreen implements Screen {
                 if (chestCol != -1 && chestCol >= checkX1 && chestCol <= checkX2 && chestRow >= checkY1 && chestRow <= checkY2) {
                     overlap = true;
                 }
-                
-                // Protege o centro para o spawn inicial
+
                 int cx = MAP_COLS / 2;
                 int cy = MAP_ROWS / 2;
                 if (cx >= checkX1 && cx <= checkX2 && cy >= checkY1 && cy <= checkY2) {
                     overlap = true;
                 }
-                
+
                 if (!overlap) {
-                    for(int c = lakeX; c < lakeX + lakeW; c++) {
-                        for(int r = lakeY; r < lakeY + lakeH; r++) {
+                    for (int c = lakeX; c < lakeX + lakeW; c++) {
+                        for (int r = lakeY; r < lakeY + lakeH; r++) {
                             waterMap[c][r] = true;
                         }
                     }
                     lakesPlaced++;
-                    break; // Posicionado com sucesso
+                    break;
                 }
             }
         }
-        
-        // Garante pelo menos 1 lago se as tentativas falharem
+
         if (lakesPlaced == 0) {
             outer:
             for (int c = 2; c < MAP_COLS - 2; c++) {
                 for (int r = 2; r < MAP_ROWS - 2; r++) {
-                    if (!waterMap[c][r] && (c != MAP_COLS/2 || r != MAP_ROWS/2) && (c != chestCol || r != chestRow)) {
+                    if (!waterMap[c][r] && (c != MAP_COLS / 2 || r != MAP_ROWS / 2) && (c != chestCol || r != chestRow)) {
                         boolean doorNear = false;
                         for (DoorPoint d : currentDoors) {
                             if (Math.abs(d.col - c) <= 1 && Math.abs(d.row - r) <= 1) doorNear = true;
                         }
                         if (!doorNear) {
                             waterMap[c][r] = true;
-                            waterMap[c+1][r] = true;
+                            waterMap[c + 1][r] = true;
                             break outer;
                         }
                     }
@@ -341,9 +326,14 @@ public class DungeonScreen implements Screen {
 
     @Override
     public void render(float delta) {
+        if (session.isGameOver()) {
+            game.setScreen(new GameOverScreen(game, session.getCurrentFloor()));
+            dispose();
+            return;
+        }
+
         selectionCooldown -= delta;
 
-        // Input global tratado antes do movimento/seleção para evitar dupla ativação
         if (paused) {
             handlePauseInput();
             stateTime = 0f;
@@ -364,19 +354,19 @@ public class DungeonScreen implements Screen {
                 return;
             }
             if (Gdx.input.isKeyJustPressed(Input.Keys.TAB)) {
-                if (player.getTeam().size() >= 2) {
+                if (session.getPlayer().getTeam().size() >= 2) {
                     selectingTeam = true;
                     selectionCooldown = 0.2f;
                     return;
                 }
             }
             if (Gdx.input.isKeyJustPressed(Input.Keys.M)) {
-                game.setScreen(new PartyMenuScreen(game, this, player, inventory));
+                game.setScreen(new PartyMenuScreen(game, this, session.getPlayer(), session.getInventory()));
                 return;
             }
             handleMovement(delta);
         }
-        
+
         if (isMoving) {
             stateTime += delta;
         } else {
@@ -391,21 +381,19 @@ public class DungeonScreen implements Screen {
 
         viewport.apply();
         batch.setProjectionMatrix(viewport.getCamera().combined);
-        
-        // Offset para centralizar a sala de 416x224 na tela de 426x240
+
         float offsetX = (viewport.getWorldWidth() - (MAP_COLS * TILE)) / 2f;
         float offsetY = (viewport.getWorldHeight() - (MAP_ROWS * TILE)) / 2f;
 
         batch.begin();
 
-        // ========== DESENHA O MAPA ==========
         for (int c = 0; c < MAP_COLS; c++) {
             for (int r = 0; r < MAP_ROWS; r++) {
                 float px = offsetX + c * TILE;
                 float py = offsetY + r * TILE;
-                
+
                 batch.draw(texFloor, px, py, TILE, TILE);
-                
+
                 if (isWall(c, r)) {
                     batch.draw(texWall, px, py, TILE, TILE);
                 } else if (isWater(c, r)) {
@@ -415,53 +403,50 @@ public class DungeonScreen implements Screen {
                 }
             }
         }
-        
+
         for (DoorPoint d : currentDoors) {
             batch.draw(texDoor, offsetX + d.col * TILE, offsetY + d.row * TILE, TILE, TILE);
         }
-        
+
         if (chestCol != -1 && chestRow != -1) {
             batch.draw(texChest, offsetX + chestCol * TILE, offsetY + chestRow * TILE, TILE, TILE);
         }
-        
-        // Desenha o sprite do jogador conforme a direção
+
         Texture playerTex = getPlayerTexture();
         float drawW = 32f;
         float drawH = 32f;
         float drawX = offsetX + playerX + (TILE - drawW) / 2f;
         float drawY = offsetY + playerY + (TILE - drawH) / 2f;
-        
+
         batch.draw(playerTex, drawX, drawY, drawW, drawH);
 
-        // ========== SIDEBAR DA EQUIPE ==========
         drawPartySidebar(batch, font);
 
-        // ========== DESENHA UI OVERLAY ==========
         batch.setColor(0, 0, 0, 0.7f);
         batch.draw(game.getPixelWhite(), 0, viewport.getWorldHeight() - 30, viewport.getWorldWidth(), 30);
         batch.setColor(Color.WHITE);
-        
+
         Room current = dungeonManager.getCurrentRoom();
         font.setColor(Color.YELLOW);
         font.draw(batch, current.getName(), 5, viewport.getWorldHeight() - 5);
-        
+
+        Pokemon active = session.getPlayer().getActivePokemon();
         font.setColor(Color.CYAN);
-        Pokemon active = player.getActivePokemon();
-        String pName = (active != null) ? active.getName() : "Sem Pkm";
-        font.draw(batch, "Pkm: " + pName, 120, viewport.getWorldHeight() - 5);
-        
+        font.draw(batch, "Andar " + session.getCurrentFloor(), 200, viewport.getWorldHeight() - 5);
+
         font.setColor(Color.WHITE);
-        font.draw(batch, "Itens: " + inventory.getSize(), 240, viewport.getWorldHeight() - 5);
+        font.draw(batch, "Itens: " + session.getInventory().getSize(), 300, viewport.getWorldHeight() - 5);
+
+        font.setColor(Color.ORANGE);
+        font.draw(batch, "Bolas: " + session.getPokeballs(), 370, viewport.getWorldHeight() - 5);
 
         batch.setColor(0, 0, 0, 0.7f);
         batch.draw(game.getPixelWhite(), 0, 0, viewport.getWorldWidth(), 20);
         batch.setColor(Color.WHITE);
-        
+
         if (selectingTeam) {
             String msg = "Selecione 2 Pokemons p/ trocar [ENTER]";
-            if (firstSwapIndex != -1) {
-                msg = "Selecione o 2o Pokemon [ENTER]";
-            }
+            if (firstSwapIndex != -1) msg = "Selecione o 2o Pokemon [ENTER]";
             font.setColor(Color.ORANGE);
             font.draw(batch, msg, 5, 14);
             font.setColor(Color.GRAY);
@@ -470,7 +455,7 @@ public class DungeonScreen implements Screen {
             font.setColor(Color.LIGHT_GRAY);
             font.draw(batch, statusMessage, 5, 14);
             font.setColor(Color.GRAY);
-            font.draw(batch, "[TAB] Menu | [ESC] Sair", viewport.getWorldWidth() - 165, 14);
+            font.draw(batch, "[TAB] Menu | [ESC] Pausa | [M] Mochila", viewport.getWorldWidth() - 265, 14);
         }
 
         drawMiniMap(batch, viewport);
@@ -486,16 +471,13 @@ public class DungeonScreen implements Screen {
         float sw = viewport.getWorldWidth();
         float sh = viewport.getWorldHeight();
 
-        // Fundo escuro
         batch.setColor(0, 0, 0, 0.8f);
         batch.draw(game.getPixelWhite(), 0, 0, sw, sh);
         batch.setColor(Color.WHITE);
 
-        // Título
         font.setColor(Color.WHITE);
         font.draw(batch, "PAUSE", sw / 2 - 20, sh / 2 + 30);
 
-        // Opções
         String[] options = { "RESUMIR", "SAIR" };
         float y = sh / 2;
         for (int i = 0; i < options.length; i++) {
@@ -511,9 +493,7 @@ public class DungeonScreen implements Screen {
 
         font.setColor(Color.GRAY);
         font.draw(batch, "[ENTER] Selecionar", sw / 2 - 55, y - 8);
-
         font.setColor(Color.WHITE);
-        batch.setColor(Color.WHITE);
     }
 
     private void handlePauseInput() {
@@ -531,8 +511,8 @@ public class DungeonScreen implements Screen {
             if (pauseCursor == 0) {
                 paused = false;
             } else {
-                game.setScreen(new MenuScreen(game));
                 dispose();
+                game.setScreen(new MenuScreen(game));
             }
         }
     }
@@ -540,29 +520,23 @@ public class DungeonScreen implements Screen {
     private void drawMiniMap(SpriteBatch batch, Viewport viewport) {
         float sw = viewport.getWorldWidth();
         float sh = viewport.getWorldHeight();
-        
-        // Área do minimapa no canto superior direito
-        float mapSize = 64f; // tamanho base da área de desenho do mapa
+
+        float mapSize = 64f;
         float startX = sw - mapSize - 10;
         float startY = sh - mapSize - 10;
-        
-        // Fundo do minimapa
+
         batch.setColor(0, 0, 0, 0.6f);
         batch.draw(game.getPixelWhite(), startX - 5, startY - 5, mapSize + 10, mapSize + 10);
         batch.setColor(Color.WHITE);
 
         DungeonGraph graph = dungeonManager.getGraph();
         Room current = dungeonManager.getCurrentRoom();
-        
-        float cellSize = 8f; // Tamanho de cada bloco de sala
-        float spacing = 16f; // Distância entre as salas
-        
-        // Vamos centralizar o minimapa na sala (0,0) ou na sala atual para que fique dinâmico?
-        // Como o mapa é pequeno, usaremos um offset fixo baseado no (0,0) ficando na parte inferior esquerda do minimapa.
+
+        float cellSize = 8f;
+        float spacing = 16f;
         float offsetX = startX + 16f;
         float offsetY = startY + 16f;
-        
-        // 1) Desenha as conexões primeiro (linhas)
+
         batch.setColor(Color.GRAY);
         for (Room r : graph.getAllRooms()) {
             if (r.isVisited()) {
@@ -572,38 +546,28 @@ public class DungeonScreen implements Screen {
                         float y1 = offsetY + r.getMapY() * spacing + cellSize / 2f;
                         float x2 = offsetX + neighbor.getMapX() * spacing + cellSize / 2f;
                         float y2 = offsetY + neighbor.getMapY() * spacing + cellSize / 2f;
-                        
-                        // Desenha uma linha usando o pixelWhite
-                        // Para simplificar, como o mapa é ortogonal, só desenhamos retângulos
+
                         float minX = Math.min(x1, x2);
                         float maxX = Math.max(x1, x2);
                         float minY = Math.min(y1, y2);
                         float maxY = Math.max(y1, y2);
-                        
+
                         if (minX == maxX) {
-                            // Linha vertical
                             batch.draw(game.getPixelWhite(), minX - 1, minY, 2, maxY - minY);
                         } else {
-                            // Linha horizontal
                             batch.draw(game.getPixelWhite(), minX, minY - 1, maxX - minX, 2);
                         }
                     }
                 }
             }
         }
-        
-        // 2) Desenha as salas
+
         for (Room r : graph.getAllRooms()) {
             if (r.isVisited()) {
                 float rx = offsetX + r.getMapX() * spacing;
                 float ry = offsetY + r.getMapY() * spacing;
-                
-                if (r.equals(current)) {
-                    batch.setColor(Color.CYAN); // Sala atual
-                } else {
-                    batch.setColor(Color.LIGHT_GRAY); // Sala visitada
-                }
-                
+
+                batch.setColor(r.equals(current) ? Color.CYAN : Color.LIGHT_GRAY);
                 batch.draw(game.getPixelWhite(), rx, ry, cellSize, cellSize);
             }
         }
@@ -620,7 +584,6 @@ public class DungeonScreen implements Screen {
                 default: return texPlayerDown;
             }
         } else {
-            // Alterna os sprites a cada 0.15 segundos para formar o ciclo de caminhada
             int frame = (int) (stateTime / 0.15f) % 4;
             switch (currentDirection) {
                 case 0:
@@ -653,22 +616,19 @@ public class DungeonScreen implements Screen {
 
         float cy = sy + sh - 8;
 
-        // Título
         font.setColor(selectingTeam ? Color.ORANGE : Color.YELLOW);
         font.draw(batch, "TIME", sx + 20, cy);
         cy -= 16;
 
-        for (int i = 0; i < player.getTeam().size(); i++) {
-            Pokemon p = player.getTeam().get(i);
-            boolean isActive = (p == player.getActivePokemon());
+        for (int i = 0; i < session.getPlayer().getTeam().size(); i++) {
+            Pokemon p = session.getPlayer().getTeam().get(i);
+            boolean isActive = (p == session.getPlayer().getActivePokemon());
 
-            // Cursor de navegação no modo seleção
             if (selectingTeam && i == teamCursorIndex) {
                 font.setColor(Color.YELLOW);
                 font.draw(batch, ">", sx + 10, cy);
             }
 
-            // Nome
             if (i == firstSwapIndex) {
                 font.setColor(Color.ORANGE);
             } else if (p.isFainted()) {
@@ -681,19 +641,16 @@ public class DungeonScreen implements Screen {
             String prefix = isActive ? ">" : " ";
             font.draw(batch, prefix + p.getName(), sx + 20, cy);
 
-            // Indicador de primeiro selecionado
             if (i == firstSwapIndex) {
                 font.setColor(Color.ORANGE);
                 font.draw(batch, "<<", sx + sw - 15, cy);
             }
 
-            // Sprite do Pokémon (14x14)
             Texture sprite = pokemonSprites.get(p.getName());
             if (sprite != null) {
                 batch.draw(sprite, sx + 3, cy - 16, 14, 14);
             }
 
-            // Barra de HP
             float barW = 48;
             float barH = 3;
             float hpRatio = (float) p.getHp() / p.getMaxHp();
@@ -705,7 +662,6 @@ public class DungeonScreen implements Screen {
             batch.draw(game.getPixelWhite(), sx + 20, barY, barW * hpRatio, barH);
             batch.setColor(Color.WHITE);
 
-            // Texto de HP
             font.setColor(Color.WHITE);
             font.draw(batch, p.getHp() + "/" + p.getMaxHp(), sx + 72, cy - 8);
 
@@ -719,7 +675,7 @@ public class DungeonScreen implements Screen {
     private void handleTeamSelectionInput() {
         if (selectionCooldown > 0) return;
 
-        int maxIndex = player.getTeam().size();
+        int maxIndex = session.getPlayer().getTeam().size();
 
         if (Gdx.input.isKeyJustPressed(Input.Keys.DOWN) || Gdx.input.isKeyJustPressed(Input.Keys.S)) {
             teamCursorIndex = (teamCursorIndex + 1) % maxIndex;
@@ -736,7 +692,7 @@ public class DungeonScreen implements Screen {
             } else if (firstSwapIndex == teamCursorIndex) {
                 firstSwapIndex = -1;
             } else {
-                ArrayList<Pokemon> team = player.getTeam();
+                ArrayList<Pokemon> team = session.getPlayer().getTeam();
                 Pokemon a = team.get(firstSwapIndex);
                 Pokemon b = team.get(teamCursorIndex);
                 team.set(firstSwapIndex, b);
@@ -777,9 +733,9 @@ public class DungeonScreen implements Screen {
         }
 
         Rectangle pRect = new Rectangle(nextX + 6, nextY + 6, TILE - 12, TILE - 12);
-        
+
         boolean canMove = true;
-        
+
         int startCol = (int) (pRect.x / TILE);
         int endCol = (int) ((pRect.x + pRect.width) / TILE);
         int startRow = (int) (pRect.y / TILE);
@@ -798,19 +754,17 @@ public class DungeonScreen implements Screen {
             playerY = nextY;
         }
 
-        int pCol = (int) ((playerX + TILE/2) / TILE);
-        int pRow = (int) ((playerY + TILE/2) / TILE);
+        int pCol = (int) ((playerX + TILE / 2) / TILE);
+        int pRow = (int) ((playerY + TILE / 2) / TILE);
 
-        // Verifica portas
         for (DoorPoint d : currentDoors) {
             if (pCol == d.col && pRow == d.row) {
-                // Descobre a direção geométrica desta porta
                 int dirUsed = -1;
-                if (d.row == MAP_ROWS - 1) dirUsed = 0; // Saiu por Cima
-                else if (d.col == MAP_COLS - 1) dirUsed = 1; // Saiu pela Direita
-                else if (d.row == 0) dirUsed = 2; // Saiu por Baixo
-                else if (d.col == 0) dirUsed = 3; // Saiu pela Esquerda
-                
+                if (d.row == MAP_ROWS - 1) dirUsed = 0;
+                else if (d.col == MAP_COLS - 1) dirUsed = 1;
+                else if (d.row == 0) dirUsed = 2;
+                else if (d.col == 0) dirUsed = 3;
+
                 enterRoom(d.target, dirUsed);
                 return;
             }
@@ -818,7 +772,7 @@ public class DungeonScreen implements Screen {
 
         if (pCol == chestCol && pRow == chestRow && dungeonManager.getCurrentRoom().hasItem()) {
             Item collected = dungeonManager.getCurrentRoom().collectItem();
-            if (inventory.addItem(collected)) {
+            if (session.getInventory().addItem(collected)) {
                 statusMessage = "Pegou: " + collected.getName() + "!";
                 chestCol = -1;
             } else {
@@ -826,7 +780,7 @@ public class DungeonScreen implements Screen {
             }
         }
     }
-    
+
     private boolean isWall(int c, int r) {
         if (c < 0 || c >= MAP_COLS || r < 0 || r >= MAP_ROWS) return true;
         if (c == 0 || c == MAP_COLS - 1 || r == 0 || r == MAP_ROWS - 1) {
@@ -856,69 +810,157 @@ public class DungeonScreen implements Screen {
         boolean w = isWater(c - 1, r);
         boolean e = isWater(c + 1, r);
 
-        if (!n && !s && !w && !e) return texWater; // Bloco de água isolado
-        
-        // Cantos Externos (Onde NÃO tem água em duas direções adjacentes)
-        if (!n && !w && e && s) return texWaterNW; // Canto Superior Esquerdo do lago
-        if (!n && !e && w && s) return texWaterNE; // Canto Superior Direito
-        if (!s && !w && e && n) return texWaterSW; // Canto Inferior Esquerdo
-        if (!s && !e && w && n) return texWaterSE; // Canto Inferior Direito
-        
-        // Bordas (Onde NÃO tem água em apenas uma direção)
-        if (!n) return texWaterN; // Borda Norte do lago
-        if (!s) return texWaterS; // Borda Sul
-        if (!w) return texWaterW; // Borda Oeste
-        if (!e) return texWaterE; // Borda Leste
-        
-        return texWaterCenter; // Rodeado de água
+        if (!n && !s && !w && !e) return texWater;
+
+        if (!n && !w && e && s) return texWaterNW;
+        if (!n && !e && w && s) return texWaterNE;
+        if (!s && !w && e && n) return texWaterSW;
+        if (!s && !e && w && n) return texWaterSE;
+
+        if (!n) return texWaterN;
+        if (!s) return texWaterS;
+        if (!w) return texWaterW;
+        if (!e) return texWaterE;
+
+        return texWaterCenter;
     }
 
     private void enterRoom(Room target, int directionUsed) {
         Room oldRoom = dungeonManager.getCurrentRoom();
         Room prevRoom = dungeonManager.canGoBack() ? dungeonManager.getRoomHistory().peek() : null;
-        
-        // Se a porta leva para a sala anterior, faz o pop na Stack (Backtrack)
+
         if (target.equals(prevRoom)) {
             dungeonManager.goBack();
         } else {
-            // Se for uma sala nova, empurra pro Stack (MoveTo)
             dungeonManager.moveTo(target);
         }
-        
-        // Calcula a direção geométrica da porta de entrada na nova sala baseada no posicionamento relativo
+
         int dx = oldRoom.getMapX() - target.getMapX();
         int dy = oldRoom.getMapY() - target.getMapY();
-        if (dy < 0) {
-            lastEntryDirection = 2; // oldRoom está abaixo de target -> entrou pelo Baixo
-        } else if (dx > 0) {
-            lastEntryDirection = 1; // oldRoom está à direita de target -> entrou pela Direita
-        } else if (dy > 0) {
-            lastEntryDirection = 0; // oldRoom está acima de target -> entrou pelo Topo
-        } else if (dx < 0) {
-            lastEntryDirection = 3; // oldRoom está à esquerda de target -> entrou pela Esquerda
-        } else {
-            lastEntryDirection = -1;
+        if (dy < 0) lastEntryDirection = 2;
+        else if (dx > 0) lastEntryDirection = 1;
+        else if (dy > 0) lastEntryDirection = 0;
+        else if (dx < 0) lastEntryDirection = 3;
+        else lastEntryDirection = -1;
+
+        buildRoomMap();
+
+        // Handle random events
+        if (target.getEvent() != RoomEvent.NONE) {
+            handleRoomEvent(target);
+            target.triggerEvent();
+            return;
         }
-        
-        buildRoomMap(); 
-        
+
         if (target.hasEnemy()) {
-            Pokemon active = player.getActivePokemon();
+            Pokemon active = session.getPlayer().getActivePokemon();
             if (active != null) {
-                game.setScreen(new BattleScreen(game, this, player, active, target.getEnemy(), inventory));
+                Pokemon enemy = target.getEnemy();
+                target.setEnemy(null);
+                game.setScreen(new BattleScreen(game, this, session, active, enemy));
                 return;
             } else {
-                statusMessage = "Seu time desmaiou. Fuja!";
+                session.setGameOver(true);
                 return;
             }
         }
+
         statusMessage = "Entrou em: " + target.getName();
     }
 
-    @Override public void resize(int w, int h) { game.getViewport().update(w, h, true); }
-    @Override public void pause() {}
-    @Override public void resume() {}
-    @Override public void hide() {}
+    private void handleRoomEvent(Room room) {
+        switch (room.getEvent()) {
+            case MYSTERY_CHEST:
+                if (room.hasItem()) {
+                    Item item = room.collectItem();
+                    if (session.getInventory().addItem(item)) {
+                        statusMessage = "Baú Misterioso! Encontrou: " + item.getName() + "!";
+                    } else {
+                        statusMessage = "Baú Misterioso! Mochila cheia!";
+                    }
+                } else {
+                    statusMessage = "Baú Misterioso! Vazio...";
+                }
+                break;
+            case HEALING_SPRING:
+                for (Pokemon p : session.getPlayer().getTeam()) {
+                    p.heal(15);
+                }
+                statusMessage = "Fonte de Cura! Time recuperou 15 HP!";
+                break;
+            case RARE_POKEMON:
+                statusMessage = "Sala Secreta! Um Pokemon raro aparece!";
+                if (room.hasEnemy()) {
+                    Pokemon active = session.getPlayer().getActivePokemon();
+                    if (active != null) {
+                        Pokemon enemy = room.getEnemy();
+                        room.setEnemy(null);
+                        game.setScreen(new BattleScreen(game, this, session, active, enemy));
+                        return;
+                    }
+                }
+                break;
+        }
+    }
+
+    public void onBattleWon(Pokemon defeatedEnemy) {
+        // Build status message with loot and level-up info
+        StringBuilder msg = new StringBuilder();
+        msg.append("Venceu!");
+        String lootMsg = session.getLastLootMessage();
+        if (!lootMsg.isEmpty()) {
+            msg.append(" ").append(lootMsg);
+        }
+        // Check for level ups
+        for (Pokemon p : session.getPlayer().getTeam()) {
+            if (p.getExp() >= p.getExpToNext()) {
+                msg.append(" ").append(p.getName()).append(" Nv.").append(p.getLevel()).append("!");
+            }
+        }
+        statusMessage = msg.toString();
+
+        if (defeatedEnemy != null && defeatedEnemy.isFainted()) {
+            game.setScreen(new CaptureScreen(game, this, session, defeatedEnemy));
+            return;
+        }
+        if (session.shouldShowCenter()) {
+            game.setScreen(new PokemonCenterScreen(game, this, session));
+            return;
+        }
+        game.setScreen(this);
+    }
+
+    public void afterCapture() {
+        if (session.shouldShowCenter()) {
+            game.setScreen(new PokemonCenterScreen(game, this, session));
+            return;
+        }
+        statusMessage = "Capture concluida!";
+        game.setScreen(this);
+    }
+
+    public void afterCenter() {
+        game.setScreen(new RewardChoiceScreen(game, this, session));
+    }
+
+    public void onRewardChosen() {
+        session.nextFloor();
+        generateFloor();
+        statusMessage = "Andar " + session.getCurrentFloor() + "!";
+        game.setScreen(this);
+    }
+
+    @Override
+    public void resize(int w, int h) { game.getViewport().update(w, h, true); }
+
+    @Override
+    public void pause() {}
+
+    @Override
+    public void resume() {}
+
+    @Override
+    public void hide() {}
 
     @Override
     public void dispose() {

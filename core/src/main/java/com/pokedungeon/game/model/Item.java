@@ -2,50 +2,40 @@ package com.pokedungeon.game.model;
 
 /**
  * Representa um item no jogo.
- *
- * Itens podem curar HP dos pokémons.
- * Mantido simples propositalmente — foco acadêmico.
- *
- * Princípios de POO:
- * - Encapsulamento: atributos privados com getters
  */
 public class Item {
 
+    public enum ItemType {
+        POTION,
+        POKEBALL,
+        REVIVE
+    }
+
     private String name;
+    private ItemType itemType;
     private int healAmount;
 
-    /**
-     * Cria um novo item.
-     *
-     * @param name       nome do item
-     * @param healAmount quantidade de HP que o item cura
-     */
     public Item(String name, int healAmount) {
+        this(name, ItemType.POTION, healAmount);
+    }
+
+    public Item(String name, ItemType itemType, int healAmount) {
         this.name = name;
+        this.itemType = itemType;
         this.healAmount = healAmount;
     }
 
-    /**
-     * Usa o item em um pokémon, curando seu HP.
-     *
-     * @param target pokémon que receberá a cura
-     */
     public void use(Pokemon target) {
         target.heal(healAmount);
     }
 
     // --- Getters ---
-
-    public String getName() {
-        return name;
-    }
-
-    public int getHealAmount() {
-        return healAmount;
-    }
+    public String getName() { return name; }
+    public ItemType getItemType() { return itemType; }
+    public int getHealAmount() { return healAmount; }
 
     @Override
     public String toString() {
-        return name + " (Cura: " + healAmount + " HP)";
+        return name + " (" + itemType + ")";
     }
 }
